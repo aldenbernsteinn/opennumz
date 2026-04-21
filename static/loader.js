@@ -1,6 +1,6 @@
 // === Replace logos and branding ===
 (function() {
-  var LOGO_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 150 80" style="width:100%;height:100%"><path d="M15 25 L15 55 Q15 65 25 65 L50 65 Q60 65 60 55 L60 25" stroke="currentColor" stroke-width="7" stroke-linecap="round" fill="none"/><path d="M75 25 L75 55 Q75 65 85 65 L110 65 Q120 65 120 55 L120 25" stroke="currentColor" stroke-width="7" stroke-linecap="round" fill="none"/><path d="M60 29 Q67 20 75 29" stroke="currentColor" stroke-width="5" stroke-linecap="round" fill="none"/><path d="M15 29 L3 23" stroke="currentColor" stroke-width="5" stroke-linecap="round"/><path d="M120 29 L132 23" stroke="currentColor" stroke-width="5" stroke-linecap="round"/></svg>';
+  var LOGO_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" style="width:100%;height:100%"><path d="M12 70 L12 42 Q12 25 26 25 L35 25 Q48 25 48 42 L48 70" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none"/><path d="M52 70 L52 42 Q52 25 65 25 L74 25 Q88 25 88 42 L88 70" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none"/><path d="M48 34 Q50 28 52 34" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" fill="none"/><path d="M12 38 L2 32" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"/><path d="M88 38 L98 32" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"/></svg>';
 
   function fixBranding() {
     // Replace logo images with our SVG

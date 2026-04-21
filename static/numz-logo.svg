@@ -1,17 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100" fill="none">
-  <!-- Left lens (upside-down n) -->
-  <path d="M20 30 L20 65 Q20 75 30 75 L55 75 Q65 75 65 65 L65 30"
-        stroke="currentColor" stroke-width="8" stroke-linecap="round" fill="none"/>
-  <!-- Right lens (upside-down n) -->
-  <path d="M85 30 L85 65 Q85 75 95 75 L120 75 Q130 75 130 65 L130 30"
-        stroke="currentColor" stroke-width="8" stroke-linecap="round" fill="none"/>
-  <!-- Bridge -->
-  <path d="M65 35 Q75 25 85 35"
-        stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none"/>
-  <!-- Left arm -->
-  <path d="M20 35 L5 28"
-        stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
-  <!-- Right arm -->
-  <path d="M130 35 L145 28"
-        stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <path d="M12 70 L12 42 Q12 25 26 25 L35 25 Q48 25 48 42 L48 70" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <path d="M52 70 L52 42 Q52 25 65 25 L74 25 Q88 25 88 42 L88 70" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <path d="M48 34 Q50 28 52 34" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" fill="none"/>
+  <path d="M12 38 L2 32" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"/>
+  <path d="M88 38 L98 32" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"/>
 </svg>
