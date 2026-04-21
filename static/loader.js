@@ -1,7 +1,7 @@
 // === Replace logos and branding ===
 (function() {
   // Our logo as a data URI so we can set it as img src without SvelteKit fighting us
-  var LOGO_DATA = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="-20 14 134 64"><path d="M8 28 L88 24" stroke="white" stroke-width="4.5" stroke-linecap="round"/><path d="M8 28 L8 56 Q8 70 20 70 L34 70 Q46 70 46 56 L46 28" stroke="white" stroke-width="5.5" stroke-linecap="round" fill="none"/><path d="M52 27 L52 52 Q52 63 61 63 L72 63 Q82 63 82 52 L82 25" stroke="white" stroke-width="5" stroke-linecap="round" fill="none"/><path d="M88 24 L108 22" stroke="white" stroke-width="3.5" stroke-linecap="round"/><path d="M8 28 L-16 32" stroke="white" stroke-width="4" stroke-linecap="round"/></svg>');
+  var LOGO_DATA = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100"><g fill="none" stroke="white" stroke-linecap="round" stroke-linejoin="round" transform="rotate(-2,100,50)"><rect x="24" y="28" width="58" height="44" rx="14" ry="14" stroke-width="4.5"/><rect x="92" y="25" width="46" height="36" rx="12" ry="12" stroke-width="3.8"/><path d="M82 44 Q87 34 92 40" stroke-width="3.5"/><path d="M24 44 L2 48" stroke-width="4"/><path d="M138 36 L164 32" stroke-width="3"/></g></svg>');
 
   function fixBranding() {
     // Force all logo/icon img src to our logo
