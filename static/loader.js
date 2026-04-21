@@ -1,36 +1,25 @@
 // === Replace logos and branding ===
 (function() {
-  var LOGO_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" style="width:100%;height:100%"><path d="M12 70 L12 42 Q12 25 26 25 L35 25 Q48 25 48 42 L48 70" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none"/><path d="M52 70 L52 42 Q52 25 65 25 L74 25 Q88 25 88 42 L88 70" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none"/><path d="M12 38 L2 32" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"/><path d="M88 38 L98 32" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"/></svg>';
+  // Our logo as a data URI so we can set it as img src without SvelteKit fighting us
+  var LOGO_DATA = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 106 100"><path d="M10 25 L96 25" stroke="white" stroke-width="5" stroke-linecap="round"/><path d="M10 25 L10 55 Q10 72 24 72 L36 72 Q50 72 50 55 L50 25" stroke="white" stroke-width="5.5" stroke-linecap="round" fill="none"/><path d="M56 25 L56 55 Q56 72 70 72 L82 72 Q96 72 96 55 L96 25" stroke="white" stroke-width="5.5" stroke-linecap="round" fill="none"/><path d="M10 32 L1 25" stroke="white" stroke-width="4.5" stroke-linecap="round"/><path d="M96 32 L105 25" stroke="white" stroke-width="4.5" stroke-linecap="round"/></svg>');
 
   function fixBranding() {
-    // Replace logo images with our SVG
-    var imgs = document.querySelectorAll('img[src*="logo"], img[src*="splash"], img[src*="favicon.png"]');
+    // Force all logo/icon img src to our logo
+    var imgs = document.querySelectorAll('img[src*="favicon"], img[src*="logo"], img[src*="splash"], img.sidebar-new-chat-icon');
     for (var i = 0; i < imgs.length; i++) {
-      var img = imgs[i];
-      if (img.dataset.numzDone) continue;
-      var wrap = document.createElement('div');
-      wrap.innerHTML = LOGO_SVG;
-      wrap.style.cssText = 'display:inline-flex;align-items:center;color:inherit;' +
-        'width:' + (img.offsetWidth || 32) + 'px;height:' + (img.offsetHeight || 32) + 'px';
-      img.parentElement.replaceChild(wrap, img);
+      if (imgs[i].src !== LOGO_DATA) {
+        imgs[i].src = LOGO_DATA;
+      }
     }
 
-    // Replace sidebar name element
+    // Replace sidebar name
     var nameEl = document.getElementById('sidebar-webui-name');
     if (nameEl && nameEl.textContent !== 'OpenNumz') {
       nameEl.textContent = 'OpenNumz';
     }
-
-    // Replace any heading/text that still says "Open WebUI" in the main content
-    var headings = document.querySelectorAll('h1, h2, .text-2xl, .text-3xl');
-    for (var j = 0; j < headings.length; j++) {
-      if (headings[j].textContent.indexOf('Open WebUI') !== -1) {
-        headings[j].textContent = headings[j].textContent.replace(/Open WebUI/g, 'OpenNumz');
-      }
-    }
   }
 
-  setInterval(fixBranding, 2000);
+  setInterval(fixBranding, 1500);
 })();
 
 
