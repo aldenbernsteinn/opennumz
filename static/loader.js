@@ -1,6 +1,6 @@
 // === Replace logos and branding ===
 (function() {
-  var LOGO_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" style="width:100%;height:100%"><path d="M12 30 L12 58 Q12 75 26 75 L35 75 Q48 75 48 58 L48 30" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none"/><path d="M52 30 L52 58 Q52 75 65 75 L74 75 Q88 75 88 58 L88 30" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none"/><path d="M48 66 Q50 72 52 66" stroke="currentColor" stroke-width="4.5" stroke-linecap="round" fill="none"/><path d="M12 62 L2 68" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"/><path d="M88 62 L98 68" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"/></svg>';
+  var LOGO_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" style="width:100%;height:100%"><path d="M12 70 L12 42 Q12 25 26 25 L35 25 Q48 25 48 42 L48 70" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none"/><path d="M52 70 L52 42 Q52 25 65 25 L74 25 Q88 25 88 42 L88 70" stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none"/><path d="M12 38 L2 32" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"/><path d="M88 38 L98 32" stroke="currentColor" stroke-width="4.5" stroke-linecap="round"/></svg>';
 
   function fixBranding() {
     // Replace logo images with our SVG
