@@ -1,7 +1,7 @@
 // === Replace logos and branding ===
 (function() {
   // Our logo as a data URI so we can set it as img src without SvelteKit fighting us
-  var LOGO_DATA = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 106 100"><path d="M10 25 L96 25" stroke="white" stroke-width="5" stroke-linecap="round"/><path d="M10 25 L10 55 Q10 72 24 72 L36 72 Q50 72 50 55 L50 25" stroke="white" stroke-width="5.5" stroke-linecap="round" fill="none"/><path d="M56 25 L56 55 Q56 72 70 72 L82 72 Q96 72 96 55 L96 25" stroke="white" stroke-width="5.5" stroke-linecap="round" fill="none"/><path d="M10 32 L1 25" stroke="white" stroke-width="4.5" stroke-linecap="round"/><path d="M96 32 L105 25" stroke="white" stroke-width="4.5" stroke-linecap="round"/></svg>');
+  var LOGO_DATA = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="-14 16 134 64"><path d="M10 28 L96 28" stroke="white" stroke-width="5" stroke-linecap="round"/><path d="M10 28 L10 58 Q10 74 24 74 L36 74 Q50 74 50 58 L50 28" stroke="white" stroke-width="5.5" stroke-linecap="round" fill="none"/><path d="M56 28 L56 58 Q56 74 70 74 L82 74 Q96 74 96 58 L96 28" stroke="white" stroke-width="5.5" stroke-linecap="round" fill="none"/><path d="M10 28 Q4 24 -2 28 L-10 34" stroke="white" stroke-width="4" stroke-linecap="round" fill="none"/><path d="M96 28 Q102 24 108 28 L116 34" stroke="white" stroke-width="4" stroke-linecap="round" fill="none"/></svg>');
 
   function fixBranding() {
     // Force all logo/icon img src to our logo
