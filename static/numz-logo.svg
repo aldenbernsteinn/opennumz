@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100" fill="none">
+  <!-- Left lens (upside-down n) -->
+  <path d="M20 30 L20 65 Q20 75 30 75 L55 75 Q65 75 65 65 L65 30"
+        stroke="currentColor" stroke-width="8" stroke-linecap="round" fill="none"/>
+  <!-- Right lens (upside-down n) -->
+  <path d="M85 30 L85 65 Q85 75 95 75 L120 75 Q130 75 130 65 L130 30"
+        stroke="currentColor" stroke-width="8" stroke-linecap="round" fill="none"/>
+  <!-- Bridge -->
+  <path d="M65 35 Q75 25 85 35"
+        stroke="currentColor" stroke-width="6" stroke-linecap="round" fill="none"/>
+  <!-- Left arm -->
+  <path d="M20 35 L5 28"
+        stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
+  <!-- Right arm -->
+  <path d="M130 35 L145 28"
+        stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
+</svg>

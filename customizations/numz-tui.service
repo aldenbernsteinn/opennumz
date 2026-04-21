@@ -1,0 +1,16 @@
+[Unit]
+Description=numz TUI — web terminal for numz CLI on tailscale :3001
+After=network.target numz-server.service
+
+[Service]
+Type=simple
+ExecStart=/home/aldenb/.numz/ttyd-start.sh
+Environment=HOME=/home/aldenb
+Environment="PATH=/home/aldenb/.local/bin:/usr/local/bin:/usr/bin:/bin"
+Environment=TERM=xterm-256color
+WorkingDirectory=/home/aldenb
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
