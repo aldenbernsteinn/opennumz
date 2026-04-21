@@ -1,7 +1,7 @@
 // === Replace logos and branding ===
 (function() {
   // Our logo as a data URI so we can set it as img src without SvelteKit fighting us
-  var LOGO_DATA = 'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2080%2080%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-linecap%3D%22round%22%20stroke-width%3D%225.5%22%3E%3Cpath%20d%3D%22M8%2012%20L8%2046%20Q8%2060%2020%2060%20L26%2060%20Q36%2060%2036%2046%20L36%2012%22/%3E%3Cpath%20d%3D%22M44%2012%20L44%2046%20Q44%2060%2056%2060%20L62%2060%20Q72%2060%2072%2046%20L72%2012%22/%3E%3Cline%20x1%3D%228%22%20y1%3D%2212%22%20x2%3D%2272%22%20y2%3D%2212%22%20stroke-width%3D%224%22/%3E%3C/g%3E%3C/svg%3E';
+  var LOGO_DATA = 'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%20100%2060%22%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22white%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20transform%3D%22rotate%28-2%2C50%2C30%29%22%3E%3Crect%20x%3D%2212%22%20y%3D%2218%22%20width%3D%2230%22%20height%3D%2224%22%20rx%3D%225%22%20ry%3D%225%22%20stroke-width%3D%224%22/%3E%3Crect%20x%3D%2252%22%20y%3D%2218%22%20width%3D%2230%22%20height%3D%2224%22%20rx%3D%225%22%20ry%3D%225%22%20stroke-width%3D%224%22/%3E%3Cpath%20d%3D%22M42%2026%20Q47%2019%2052%2026%22%20stroke-width%3D%223.5%22/%3E%3Cline%20x1%3D%2212%22%20y1%3D%2226%22%20x2%3D%221%22%20y2%3D%2222%22%20stroke-width%3D%223.5%22/%3E%3Cline%20x1%3D%2282%22%20y1%3D%2226%22%20x2%3D%2293%22%20y2%3D%2222%22%20stroke-width%3D%223.5%22/%3E%3C/g%3E%3C/svg%3E';
 
   function fixBranding() {
     // Force all logo/icon img src to our logo
