@@ -26,7 +26,7 @@
 // === Sidebar buttons (Code + Jarvis, near New Chat) ===
 (function() {
   var page = window.location.pathname;
-  if (page === '/code.html' || page === '/code' || page === '/jarvis.html' || page === '/jarvis') return;
+  if (page === '/code.html' || page === '/code' || page === '/jarvis.html' || page === '/jarvis' || page === '/quiz.html' || page === '/quiz') return;
 
   var injecting = false;
 
@@ -64,6 +64,12 @@
     jarvis.className = 'sidebar-link-btn';
     jarvis.textContent = 'Jarvis';
 
+    var quiz = document.createElement('a');
+    quiz.href = '/quiz';
+    quiz.className = 'sidebar-link-btn';
+    quiz.textContent = 'Quiz';
+
+    wrap.appendChild(quiz);
     wrap.appendChild(code);
     wrap.appendChild(jarvis);
 
