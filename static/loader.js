@@ -172,6 +172,79 @@
 })();
 
 
+// === Code Mode toggle ===
+(function() {
+  var codeMode = false;
+  var codePinVerified = false;
+
+  function injectCodeToggle() {
+    if (document.getElementById('code-mode-btn')) return;
+
+    // Put it next to the Think button
+    var thinkBtn = document.getElementById('thinking-toggle-btn');
+    var target = thinkBtn ? thinkBtn.parentElement : null;
+
+    if (!target) {
+      var sendBtn = document.getElementById('send-message-button');
+      if (sendBtn) target = sendBtn.parentElement;
+    }
+    if (!target) return;
+
+    var btn = document.createElement('button');
+    btn.id = 'code-mode-btn';
+    btn.type = 'button';
+    btn.className = 'thinking-toggle-btn';
+    btn.textContent = 'Code';
+    btn.title = 'Code mode OFF';
+
+    btn.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+
+      if (!codeMode && !codePinVerified) {
+        // Show PIN prompt
+        var pin = prompt('Enter Code PIN:');
+        if (!pin) return;
+        fetch('/api/code/verify-pin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin: pin })
+        }).then(function(r) {
+          if (r.ok) {
+            codePinVerified = true;
+            codeMode = true;
+            btn.classList.add('active');
+            btn.title = 'Code mode ON';
+          } else {
+            alert('Wrong PIN');
+          }
+        });
+        return;
+      }
+
+      codeMode = !codeMode;
+      btn.classList.toggle('active', codeMode);
+      btn.title = codeMode ? 'Code mode ON' : 'Code mode OFF';
+    });
+
+    target.insertBefore(btn, target.firstChild);
+  }
+
+  // Intercept chat submissions when Code mode is on
+  // Override fetch to redirect /api/chat/completions to /api/numz/chat
+  var origFetch = window.fetch;
+  window.fetch = function(url, opts) {
+    if (codeMode && typeof url === 'string' && url.indexOf('/api/chat/completions') !== -1 && opts && opts.method === 'POST') {
+      // Redirect to numz proxy
+      return origFetch.call(this, '/api/numz/chat', opts);
+    }
+    return origFetch.apply(this, arguments);
+  };
+
+  setInterval(injectCodeToggle, 2000);
+})();
+
+
 // === Strip emojis from assistant messages ===
 (function() {
   var emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}\u{FE00}-\u{FE0F}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{1FA70}-\u{1FAFF}\u{200D}\u{20E3}\u{E0020}-\u{E007F}]/gu;
