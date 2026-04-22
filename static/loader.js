@@ -173,6 +173,7 @@
   var codeMode = false; // ALWAYS start in Chat mode
   var codePinVerified = sessionStorage.getItem('numzCodePin') === 'true';
   var folderFilter = '';
+  var _pinInProgress = false;
 
   function injectSlider() {
     if (document.getElementById('mode-slider')) return;
@@ -194,7 +195,10 @@
       btn.addEventListener('click', function() {
         var mode = btn.dataset.mode;
         if (mode === 'code' && !codePinVerified) {
+          if (_pinInProgress) return;
+          _pinInProgress = true;
           var pin = prompt('Enter Code PIN:');
+          _pinInProgress = false;
           if (!pin) return;
           fetch('/api/code/verify-pin', {
             method: 'POST',
@@ -300,41 +304,14 @@
   window._numzFilterFolder = function(val) { folderFilter = val; showCodeSessions(); };
 
   window._numzOpenSession = function(id) {
-    _renderedSessionId = id;
-
-    // Close any existing stream
-    if (window._numzEventSource) {
-      window._numzEventSource.close();
-      window._numzEventSource = null;
-    }
-
-    var gotInit = false;
-    var es = new EventSource('/api/numz/sessions/' + id + '/stream');
-    window._numzEventSource = es;
-
-    es.addEventListener('init', function(e) {
-      gotInit = true;
-      var msgs = JSON.parse(e.data);
-      _renderSession(msgs);
-    });
-
-    es.addEventListener('message', function(e) {
-      var msg = JSON.parse(e.data);
-      _appendLiveMessage(msg);
-    });
-
-    es.onerror = function() {
-      if (!gotInit) {
-        // SSE endpoint not available — fall back to one-shot fetch
-        es.close();
-        window._numzEventSource = null;
-        fetch('/api/numz/sessions/' + id)
-          .then(function(r) { return r.json(); })
-          .then(function(data) {
-            if (data.messages) _renderSession(data.messages);
-          });
-      }
-    };
+    fetch('/api/numz/sessions/' + id + '/import', { method: 'POST' })
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (data.chat_id) {
+          codeMode = true;
+          window.location.href = '/c/' + data.chat_id;
+        }
+      });
   };
 
   function _appendLiveMessage(msg) {
@@ -459,6 +436,17 @@
     return h;
   }
 
+  // Detect code mode from URL
+  function detectCodeMode() {
+    if (window.location.pathname.indexOf('/c/') === 0) {
+      var modelEl = document.querySelector('[data-model-id="numz-code"]');
+      if (modelEl || document.body.dataset.numzCode === 'true') {
+        codeMode = true;
+        document.body.dataset.numzCode = 'true';
+      }
+    }
+  }
+
   // Intercept fetch when in code mode
   var _origFetch = window.fetch;
   window.fetch = function(url, opts) {
@@ -469,6 +457,7 @@
   };
 
   setInterval(injectSlider, 2000);
+  setInterval(detectCodeMode, 2000);
 })();
 
 

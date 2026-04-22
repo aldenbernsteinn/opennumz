@@ -196,3 +196,28 @@ html.light .numz-session-title { color: #333; }
   font-size: 11px;
   color: #555;
 }
+
+/* === TUI-themed code mode chats === */
+body[data-numz-code] .prose {
+  font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.7;
+}
+body[data-numz-code] .prose pre {
+  border-left: 3px solid #ec4899;
+  background: #0a0a0a;
+  border-radius: 4px;
+}
+body[data-numz-code] .prose code {
+  color: #ec4899;
+}
+body[data-numz-code] .prose pre code {
+  color: #999;
+}
+body[data-numz-code] .prose strong {
+  color: #b1b9f9;
+}
+body[data-numz-code] [data-message-id][data-role="user"] {
+  border-left: 3px solid #ec4899;
+  padding-left: 12px;
+}

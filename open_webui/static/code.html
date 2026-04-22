@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>numz</title>
+<link rel="icon" href="/static/favicon.png">
+<link rel="stylesheet" href="/static/custom.css">
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; overflow: hidden; background: #0a0a0a; font-family: -apple-system, system-ui, sans-serif; }
+#app { height: 100%; display: flex; }
+#numz-main { flex: 1; height: 100%; }
+@keyframes pulse { 0%, 100% { opacity: 0.4; } 50% { opacity: 1; } }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="numz-main"></div>
+</div>
+<script src="/static/numz-gui.js"></script>
+<script>
+(function() {
+  var sessionId = window.location.hash.replace('#', '') || null;
+  var main = document.getElementById('numz-main');
+
+  if (!sessionId) {
+    main.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#666;font-size:16px">Select a session from the sidebar</div>';
+    return;
+  }
+
+  // Connect numz-gui
+  window.numzGui.connect(sessionId, null, main);
+
+  // Listen for hash changes (switching sessions)
+  window.addEventListener('hashchange', function() {
+    var newId = window.location.hash.replace('#', '');
+    if (newId && newId !== sessionId) {
+      sessionId = newId;
+      window.numzGui.disconnect();
+      window.numzGui.connect(sessionId, null, main);
+    }
+  });
+})();
+</script>
+</body>
+</html>

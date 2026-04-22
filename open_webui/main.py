@@ -2655,6 +2655,10 @@ async def numz_chat_proxy(request: Request):
         try:
             import json as _json
             tool_call_idx = 0
+
+            def _chunk(delta):
+                return f'data: {_json.dumps({"choices": [{"delta": delta, "index": 0}], "model": "numz-code", "object": "chat.completion.chunk"})}\n\n'
+
             for line in proc.stdout:
                 line = line.strip()
                 if not line:
@@ -2672,54 +2676,46 @@ async def numz_chat_proxy(request: Request):
                         btype = block.get('type', '')
 
                         if btype == 'text':
-                            chunk = {
-                                'choices': [{'delta': {'content': block.get('text', '')}, 'index': 0}],
-                                'model': 'numz-code',
-                                'object': 'chat.completion.chunk'
-                            }
-                            yield f'data: {_json.dumps(chunk)}\n\n'
+                            yield _chunk({'content': block.get('text', '')})
 
                         elif btype == 'thinking':
-                            chunk = {
-                                'choices': [{'delta': {'reasoning_content': block.get('thinking', '')}, 'index': 0}],
-                                'model': 'numz-code',
-                                'object': 'chat.completion.chunk'
-                            }
-                            yield f'data: {_json.dumps(chunk)}\n\n'
+                            yield _chunk({'reasoning_content': block.get('thinking', '')})
 
                         elif btype == 'tool_use':
-                            tool_name = block.get('name', '')
-                            tool_input = block.get('input', {})
-                            # Format tool call description
-                            desc = tool_input.get('description', '')
-                            cmd = tool_input.get('command', tool_input.get('file_path', ''))
-                            display = f'**{tool_name}**: {desc}\n' if desc else f'**{tool_name}**\n'
-                            if cmd:
-                                display += f'```\n{cmd}\n```\n'
-                            chunk = {
-                                'choices': [{'delta': {'content': display}, 'index': 0}],
-                                'model': 'numz-code',
-                                'object': 'chat.completion.chunk'
-                            }
-                            yield f'data: {_json.dumps(chunk)}\n\n'
+                            tool_id = block.get('id', f'call_{tool_call_idx}')
+                            yield _chunk({'tool_calls': [{
+                                'index': tool_call_idx,
+                                'id': tool_id,
+                                'function': {
+                                    'name': block.get('name', ''),
+                                    'arguments': _json.dumps(block.get('input', {}))
+                                }
+                            }]})
                             tool_call_idx += 1
 
                 elif ev_type == 'user':
-                    # Tool result — show output
-                    tr = ev.get('tool_use_result', {})
-                    stdout = tr.get('stdout', '')
-                    stderr = tr.get('stderr', '')
-                    output = stdout or stderr
-                    if output:
-                        # Truncate very long outputs
-                        if len(output) > 2000:
-                            output = output[:2000] + '\n... (truncated)'
-                        chunk = {
-                            'choices': [{'delta': {'content': f'\n```\n{output}\n```\n'}, 'index': 0}],
-                            'model': 'numz-code',
-                            'object': 'chat.completion.chunk'
-                        }
-                        yield f'data: {_json.dumps(chunk)}\n\n'
+                    # Tool result
+                    content = ev.get('message', {}).get('content', '')
+                    if isinstance(content, list):
+                        for part in content:
+                            if part.get('type') == 'tool_result':
+                                result_content = part.get('content', '')
+                                if isinstance(result_content, list):
+                                    result_content = '\n'.join(
+                                        p.get('text', '') for p in result_content
+                                        if isinstance(p, dict) and p.get('type') == 'text'
+                                    )
+                                if result_content:
+                                    if len(result_content) > 4000:
+                                        result_content = result_content[:4000] + '\n... (truncated)'
+                                    yield _chunk({'content': f'\n```\n{result_content}\n```\n'})
+
+                elif ev_type == 'system':
+                    subtype = ev.get('subtype', '')
+                    if subtype == 'status':
+                        status = ev.get('status', '')
+                        if status == 'compacting':
+                            yield _chunk({'content': '\n*Compacting context...*\n'})
 
                 elif ev_type == 'result':
                     break
@@ -2742,7 +2738,7 @@ async def list_numz_sessions(folder: str = None):
     from collections import defaultdict
     from datetime import datetime
 
-    history_path = os.path.expanduser('~/.claude/history.jsonl')
+    history_path = os.path.expanduser('~/.numz/history.jsonl')
     if not os.path.isfile(history_path):
         return JSONResponse([])
 
@@ -2764,6 +2760,38 @@ async def list_numz_sessions(folder: str = None):
             if ts > sessions[sid]['ts']:
                 sessions[sid]['ts'] = ts
 
+    # Detect live sessions via PID check
+    import glob as _glob
+    import signal as _signal
+    live_sessions = set()
+    for sf in _glob.glob(os.path.expanduser('~/.numz/sessions/*.json')):
+        try:
+            with open(sf) as _sf:
+                sd = _json.load(_sf)
+            pid = sd.get('pid')
+            sid = sd.get('sessionId', '')
+            if pid and sid:
+                os.kill(pid, 0)  # check if alive (raises OSError if dead)
+                live_sessions.add(sid)
+        except (OSError, Exception):
+            pass
+
+    # Detect active sessions (JSONL recently written = AI working)
+    now = time.time()
+    active_sessions = set()
+    for sid in live_sessions:
+        proj = sessions.get(sid, {}).get('project', '')
+        if proj:
+            from pathlib import Path
+            sanitized = proj.replace('/', '-').lstrip('-')
+            jsonl_path = Path.home() / '.numz' / 'projects' / sanitized / f'{sid}.jsonl'
+            try:
+                mtime = jsonl_path.stat().st_mtime
+                if now - mtime < 15:  # Written in last 15 seconds = AI working
+                    active_sessions.add(sid)
+            except Exception:
+                pass
+
     result = []
     for sid, info in sessions.items():
         if folder and folder not in info['project']:
@@ -2775,16 +2803,19 @@ async def list_numz_sessions(folder: str = None):
             'folder': os.path.basename(info['project']) if info['project'] else '',
             'message_count': info['messages'],
             'updated_at': info['ts'] / 1000 if info['ts'] else 0,
+            'live': sid in live_sessions,
+            'active': sid in active_sessions,
         })
 
-    result.sort(key=lambda x: x['updated_at'], reverse=True)
+    # Active first, then live, then by updated_at
+    result.sort(key=lambda x: (not x['active'], not x['live'], -x['updated_at']))
     return JSONResponse(result[:100])
 
 
 def _find_session_file(session_id: str) -> str:
     """Locate the JSONL file for a numz session."""
     import glob
-    pattern = os.path.expanduser(f'~/.claude/projects/*/{session_id}.jsonl')
+    pattern = os.path.expanduser(f'~/.numz/projects/*/{session_id}.jsonl')
     files = glob.glob(pattern)
     if not files:
         raise HTTPException(status_code=404, detail='Session not found')
@@ -2806,13 +2837,16 @@ def _parse_jsonl_lines(text: str) -> list[dict]:
         if msg_type == 'user':
             content = d.get('message', {}).get('content', '')
             if isinstance(content, str) and content.strip():
+                # Filter internal metadata
+                if content.lstrip().startswith(('<local-command', '<command-name', '<command-message', '<command-args', '<local-command-stdout', '<system-reminder')):
+                    continue
                 messages.append({'role': 'user', 'content': content})
             elif isinstance(content, list):
                 text_val = ' '.join(
                     p.get('text', '') for p in content
                     if isinstance(p, dict) and p.get('type') in ('text',)
                 )
-                if text_val.strip():
+                if text_val.strip() and not text_val.lstrip().startswith(('<local-command', '<command-name', '<system-reminder')):
                     messages.append({'role': 'user', 'content': text_val})
         elif msg_type == 'assistant':
             content_blocks = d.get('message', {}).get('content', [])
@@ -2927,7 +2961,7 @@ async def list_numz_folders():
     """List unique project folders from numz sessions."""
     import json as _json
 
-    history_path = os.path.expanduser('~/.claude/history.jsonl')
+    history_path = os.path.expanduser('~/.numz/history.jsonl')
     if not os.path.isfile(history_path):
         return JSONResponse([])
 
@@ -2944,6 +2978,210 @@ async def list_numz_folders():
 
     result = [{'path': f, 'name': os.path.basename(f) or f} for f in sorted(folders)]
     return JSONResponse(result)
+
+
+# ── numz Code Mode: import session into Open WebUI chat ─────────────────
+
+_numz_chat_map: dict[str, str] = {}
+_numz_folder_id: str | None = None
+
+
+def _get_numz_folder_id() -> str:
+    """Get or create a hidden folder for numz code chats."""
+    global _numz_folder_id
+    if _numz_folder_id:
+        return _numz_folder_id
+
+    from open_webui.models.folders import Folders, FolderForm
+    from open_webui.models.users import Users
+
+    admin = Users.get_first_user()
+    user_id = admin.id if admin else 'admin'
+
+    # Check if folder already exists
+    existing = Folders.get_folders_by_user_id(user_id)
+    for f in existing:
+        if f.name == 'numz-code':
+            _numz_folder_id = f.id
+            return _numz_folder_id
+
+    # Create it
+    folder = Folders.insert_new_folder(user_id, FolderForm(name='numz-code'))
+    if folder:
+        _numz_folder_id = folder.id
+    return _numz_folder_id or 'numz-code'
+
+
+@app.post('/api/numz/sessions/{session_id}/import')
+async def import_numz_session(session_id: str):
+    """Import/update a numz JSONL session as an Open WebUI chat.
+    Hidden from Chat sidebar via folder_id."""
+    import json as _json
+    import uuid as _uuid
+    from open_webui.models.chats import Chats, ChatForm
+    from open_webui.models.users import Users
+
+    fpath = _find_session_file(session_id)
+    with open(fpath) as f:
+        text = f.read()
+    all_msgs = _parse_jsonl_lines(text)
+
+    if not all_msgs:
+        raise HTTPException(status_code=400, detail='No messages in session')
+
+    # Only import recent messages for fast click — full history is too slow
+    MAX_IMPORT = 60
+    msgs = all_msgs[-MAX_IMPORT:] if len(all_msgs) > MAX_IMPORT else all_msgs
+
+    # Build Open WebUI chat history
+    history_messages = {}
+    flat_messages = []
+    prev_id = None
+    for m in msgs:
+        mid = str(_uuid.uuid4())
+        entry = {
+            'id': mid,
+            'parentId': prev_id,
+            'childrenIds': [],
+            'role': m['role'],
+            'content': m['content'],
+            'timestamp': int(time.time()),
+        }
+        if m['role'] == 'assistant':
+            entry['model'] = 'numz'
+            entry['modelName'] = 'numz'
+            entry['modelIdx'] = 0
+            entry['done'] = True
+        if m['role'] == 'user':
+            entry['models'] = ['numz']
+        history_messages[mid] = entry
+        flat_messages.append(entry)
+        if prev_id and prev_id in history_messages:
+            history_messages[prev_id]['childrenIds'].append(mid)
+        prev_id = mid
+
+    title = all_msgs[0]['content'][:80] if all_msgs[0]['role'] == 'user' else 'numz session'
+
+    chat_data = {
+        'title': title,
+        'models': ['numz'],
+        'params': {},
+        'history': {
+            'messages': history_messages,
+            'currentId': prev_id,
+        },
+        'messages': flat_messages,
+    }
+
+    admin = Users.get_first_user()
+    user_id = admin.id if admin else 'admin'
+    folder_id = _get_numz_folder_id()
+
+    # Update existing or create new
+    existing_chat_id = _numz_chat_map.get(session_id)
+    if existing_chat_id:
+        Chats.update_chat_by_id(existing_chat_id, chat_data)
+        return JSONResponse({'chat_id': existing_chat_id, 'message_count': len(all_msgs)})
+
+    form = ChatForm(chat=chat_data, folder_id=folder_id)
+    chat = Chats.insert_new_chat(user_id, form)
+    if chat:
+        _numz_chat_map[session_id] = chat.id
+        return JSONResponse({'chat_id': chat.id, 'message_count': len(all_msgs)})
+
+    raise HTTPException(status_code=500, detail='Failed to create chat')
+
+
+# ── numz Code Mode: WebSocket bidirectional NDJSON ──────────────────────
+
+from starlette.websockets import WebSocket as _WS, WebSocketDisconnect as _WSDisconnect
+
+# Active numz processes keyed by WebSocket client id
+_numz_ws_procs: dict[str, _sp.Popen] = {}
+
+
+@app.websocket('/api/numz/ws')
+async def numz_websocket(ws: _WS):
+    """Bidirectional NDJSON pipe to a numz process.
+    Browser sends user messages + control responses via WebSocket.
+    numz sends all events (text, tool calls, thinking, progress, etc.) back."""
+    await ws.accept()
+
+    import json as _json
+
+    # Get session info from query params
+    session_id = ws.query_params.get('session')
+    cwd = ws.query_params.get('cwd', os.path.expanduser('~'))
+
+    # Build numz command
+    cmd = ['/usr/local/bin/numz',
+           '--output-format', 'stream-json',
+           '--input-format', 'stream-json',
+           '--verbose']
+    if session_id:
+        cmd += ['--resume', '--session-id', session_id]
+
+    proc = _sp.Popen(
+        cmd,
+        stdin=_sp.PIPE, stdout=_sp.PIPE, stderr=_sp.DEVNULL,
+        cwd=cwd,
+        env={**os.environ, 'TERM': 'dumb'},
+        text=True, bufsize=1
+    )
+
+    ws_id = str(id(ws))
+    _numz_ws_procs[ws_id] = proc
+
+    async def read_stdout():
+        """Forward numz stdout → WebSocket."""
+        try:
+            loop = _aio.get_event_loop()
+            while proc.poll() is None:
+                line = await loop.run_in_executor(None, proc.stdout.readline)
+                if not line:
+                    break
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    # Validate it's JSON before sending
+                    _json.loads(line)
+                    await ws.send_text(line)
+                except (ValueError, Exception):
+                    pass
+        except Exception:
+            pass
+
+    async def read_ws():
+        """Forward WebSocket messages → numz stdin."""
+        try:
+            while True:
+                data = await ws.receive_text()
+                if proc.poll() is not None:
+                    break
+                proc.stdin.write(data + '\n')
+                proc.stdin.flush()
+        except _WSDisconnect:
+            pass
+        except Exception:
+            pass
+
+    # Run both directions concurrently
+    try:
+        await _aio.gather(read_stdout(), read_ws())
+    except Exception:
+        pass
+    finally:
+        _numz_ws_procs.pop(ws_id, None)
+        proc.terminate()
+        try:
+            proc.wait(timeout=3)
+        except Exception:
+            proc.kill()
+        try:
+            await ws.close()
+        except Exception:
+            pass
 
 
 # Proxy Jarvis API (localhost:8895) for phone access via Tailscale
