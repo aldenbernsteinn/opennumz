@@ -289,9 +289,8 @@
   window._numzFilterFolder = function(val) { folderFilter = val; showCodeSessions(); };
 
   window._numzOpenSession = function(id) {
-    fetch('/api/numz/sessions/' + id).then(function(r) { return r.json(); }).then(function(data) {
-      _renderSession(data.messages);
-    });
+    // Navigate to a dedicated page that reads the JSONL and renders it
+    window.location.href = '/code?session=' + id;
   };
 
   function _findMainContent() {
