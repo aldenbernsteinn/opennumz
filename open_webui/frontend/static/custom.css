@@ -1,0 +1,198 @@
+/* Sidebar custom buttons (Quiz, Code) */
+.sidebar-custom-btns {
+  display: flex;
+  gap: 6px;
+  padding: 0 0.4375rem 8px;
+}
+
+.sidebar-link-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 7px 0;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  text-decoration: none;
+  color: #9a9a9a;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.08);
+  transition: all 0.15s;
+  cursor: pointer;
+}
+
+.sidebar-link-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #d4d4d4;
+}
+
+html.light .sidebar-link-btn {
+  color: #777;
+  border-color: rgba(0,0,0,0.08);
+}
+
+html.light .sidebar-link-btn:hover {
+  background: rgba(0,0,0,0.04);
+  color: #333;
+}
+
+/* Thinking toggle button */
+.thinking-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  border-radius: 15px;
+  border: 1px solid rgba(255,255,255,0.15);
+  background: transparent;
+  color: #888;
+  cursor: pointer;
+  transition: all 0.2s;
+  flex-shrink: 0;
+  padding: 0 12px;
+  margin-right: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+}
+
+.thinking-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #bbb;
+}
+
+.thinking-toggle-btn.active {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255,255,255,0.3);
+}
+
+.thinking-toggle-btn.active:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+html.light .thinking-toggle-btn {
+  border-color: rgba(0,0,0,0.15);
+  color: #999;
+}
+
+html.light .thinking-toggle-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: #666;
+}
+
+html.light .thinking-toggle-btn.active {
+  color: #1a1a1a;
+  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(0,0,0,0.25);
+}
+
+html.light .thinking-toggle-btn.active:hover {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+/* Chat/Code mode slider */
+.mode-slider {
+  padding: 4px 0.4375rem 8px;
+}
+.mode-slider-track {
+  display: flex;
+  background: rgba(255,255,255,0.04);
+  border-radius: 10px;
+  padding: 2px;
+  border: 1px solid rgba(255,255,255,0.06);
+}
+.mode-slider-btn {
+  flex: 1;
+  padding: 6px 0;
+  border: none;
+  background: none;
+  color: #666;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.mode-slider-btn.active {
+  background: rgba(255,255,255,0.08);
+  color: #e0e0e0;
+}
+html.light .mode-slider-track {
+  background: rgba(0,0,0,0.03);
+  border-color: rgba(0,0,0,0.06);
+}
+html.light .mode-slider-btn { color: #999; }
+html.light .mode-slider-btn.active {
+  background: rgba(0,0,0,0.06);
+  color: #333;
+}
+
+/* numz sessions overlay */
+.numz-sessions-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: inherit;
+  z-index: 5;
+  display: none;
+  overflow-y: auto;
+  padding-top: 8px;
+}
+.numz-filter {
+  padding: 4px 0.5rem 8px;
+}
+.numz-filter select {
+  width: 100%;
+  padding: 6px 10px;
+  background: rgba(255,255,255,0.04);
+  color: #ccc;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px;
+  font-size: 12px;
+  font-family: inherit;
+  appearance: none;
+  cursor: pointer;
+}
+html.light .numz-filter select {
+  background: rgba(0,0,0,0.03);
+  color: #555;
+  border-color: rgba(0,0,0,0.08);
+}
+.numz-session-list {
+  padding: 0 0.25rem;
+}
+.numz-session-item {
+  display: block;
+  padding: 10px 12px;
+  margin: 2px 0;
+  border-radius: 10px;
+  text-decoration: none;
+  color: inherit;
+  transition: background 0.1s;
+  cursor: pointer;
+}
+.numz-session-item:hover {
+  background: rgba(255,255,255,0.05);
+}
+html.light .numz-session-item:hover {
+  background: rgba(0,0,0,0.04);
+}
+.numz-session-title {
+  font-size: 13px;
+  color: #d0d0d0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 3px;
+}
+html.light .numz-session-title { color: #333; }
+.numz-session-meta {
+  font-size: 11px;
+  color: #555;
+}

@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+open_webui/data/cache/
+open_webui/data/uploads/
+open_webui/data/vector_db/
+open_webui/data/webui.db

@@ -275,6 +275,13 @@
   }
 
   function showChatSessions() {
+    // Close any live session stream
+    if (window._numzEventSource) {
+      window._numzEventSource.close();
+      window._numzEventSource = null;
+    }
+    _renderedSessionId = null;
+
     // Show all hidden chat items
     document.querySelectorAll('[id="sidebar-chat-item"],[id="sidebar-chat-group"],[id="sidebar-folder-button"]').forEach(function(el) {
       el.style.display = '';
@@ -282,6 +289,10 @@
     // Hide numz list
     var list = document.getElementById('numz-sessions-list');
     if (list) list.style.display = 'none';
+
+    // Remove session view if present
+    var sessionView = document.getElementById('numz-session-view');
+    if (sessionView) sessionView.remove();
   }
 
   function _esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/'/g,'&#39;'); }
@@ -289,27 +300,71 @@
   window._numzFilterFolder = function(val) { folderFilter = val; showCodeSessions(); };
 
   window._numzOpenSession = function(id) {
-    // Navigate to a dedicated page that reads the JSONL and renders it
-    window.location.href = '/code?session=' + id;
+    _renderedSessionId = id;
+
+    // Close any existing stream
+    if (window._numzEventSource) {
+      window._numzEventSource.close();
+      window._numzEventSource = null;
+    }
+
+    var gotInit = false;
+    var es = new EventSource('/api/numz/sessions/' + id + '/stream');
+    window._numzEventSource = es;
+
+    es.addEventListener('init', function(e) {
+      gotInit = true;
+      var msgs = JSON.parse(e.data);
+      _renderSession(msgs);
+    });
+
+    es.addEventListener('message', function(e) {
+      var msg = JSON.parse(e.data);
+      _appendLiveMessage(msg);
+    });
+
+    es.onerror = function() {
+      if (!gotInit) {
+        // SSE endpoint not available — fall back to one-shot fetch
+        es.close();
+        window._numzEventSource = null;
+        fetch('/api/numz/sessions/' + id)
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data.messages) _renderSession(data.messages);
+          });
+      }
+    };
   };
 
+  function _appendLiveMessage(msg) {
+    _allMessages.push(msg);
+    _loadedCount++;
+    var msgDiv = document.getElementById('numz-messages');
+    if (!msgDiv) return;
+    var view = document.getElementById('numz-session-view');
+    var wasNearBottom = view && (view.scrollHeight - view.scrollTop - view.clientHeight < 100);
+    msgDiv.insertAdjacentHTML('beforeend', _renderMessageBatch([msg]));
+    if (wasNearBottom && view) view.scrollTop = view.scrollHeight;
+  }
+
   function _findMainContent() {
-    // The main content is the flex-1 div that's a sibling of the sidebar
+    // The main content area is the large sibling of the sidebar.
+    // Open WebUI uses a flex layout: sidebar | resizer | content.
+    // We find the content by picking the largest non-sidebar sibling.
     var sidebar = document.getElementById('sidebar');
-    if (sidebar) {
-      // Walk siblings — the resizer is next, then the content pane
-      var el = sidebar.parentElement;
-      if (el) {
-        var kids = el.children;
-        for (var i = 0; i < kids.length; i++) {
-          if (kids[i].id !== 'sidebar' && !kids[i].id.includes('resizer') &&
-              kids[i].className && kids[i].className.indexOf('flex-1') !== -1) {
-            return kids[i];
-          }
-        }
-      }
+    if (!sidebar || !sidebar.parentElement) return null;
+    var kids = sidebar.parentElement.children;
+    var best = null;
+    var bestW = 0;
+    for (var i = 0; i < kids.length; i++) {
+      var kid = kids[i];
+      if (kid === sidebar) continue;
+      if (kid.id && kid.id.indexOf('resizer') !== -1) continue;
+      var w = kid.offsetWidth || 0;
+      if (w > bestW) { bestW = w; best = kid; }
     }
-    return null;
+    return best;
   }
 
   var _renderedSessionId = null;
