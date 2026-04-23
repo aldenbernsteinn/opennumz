@@ -3289,7 +3289,7 @@ def _numz_spawn_process(session_id: str, cwd: str) -> _sp.Popen:
            '--output-format', 'stream-json',
            '--input-format', 'stream-json',
            '--verbose']
-    if session_id:
+    if session_id and not session_id.startswith('_new_'):
         cmd += ['--resume', session_id]
 
     stderr_log = open('/tmp/numz-ws-stderr.log', 'a')
@@ -3315,10 +3315,11 @@ async def numz_websocket(ws: _WS):
     session_id = ws.query_params.get('session', '')
     cwd = ws.query_params.get('cwd', '') or os.path.expanduser('~')
 
-    if not session_id:
-        await ws.send_text(_json.dumps({'type': 'system', 'subtype': 'error', 'error': 'No session_id'}))
-        await ws.close()
-        return
+    # New sessions have no session_id yet — generate a temp key, numz will create the real one
+    from uuid import uuid4 as _uuid4
+    is_new_session = not session_id
+    if is_new_session:
+        session_id = f'_new_{_uuid4().hex[:8]}'
 
     # Check if process already running for this session
     proc = _numz_session_procs.get(session_id)

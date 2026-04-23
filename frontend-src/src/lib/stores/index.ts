@@ -96,11 +96,6 @@ export const showArchivedChats = writable(false);
 export const showChangelog = writable(false);
 
 export const showControls = writable(false);
-
-// Expose for code mode (numz-gui.js) to toggle the right panel
-if (typeof window !== 'undefined') {
-	(window as any)._numzShowControls = showControls;
-}
 export const showEmbeds = writable(false);
 export const showOverview = writable(false);
 export const showArtifacts = writable(false);
