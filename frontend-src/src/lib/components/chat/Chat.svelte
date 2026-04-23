@@ -1315,23 +1315,29 @@
 				autoScroll = true;
 				await tick();
 
-				if (history.currentId) {
-					// Force all assistant messages to done on load — if we're loading
-					// from DB, any active generation is already over. This prevents
-					// skeleton/spinner animations from running forever after refresh.
-					for (const message of Object.values(history.messages)) {
-						if (message && message.role === 'assistant') {
-							message.done = true;
-						}
-					}
-				}
-
+				// Check for active background tasks FIRST
 				const taskRes = await getTaskIdsByChatId(localStorage.token, $chatId).catch((error) => {
 					return null;
 				});
 
 				if (taskRes) {
 					taskIds = taskRes.task_ids;
+				}
+
+				const hasActiveTasks = taskIds && taskIds.length > 0;
+
+				if (history.currentId) {
+					// Force assistant messages to done on load — but NOT the current
+					// message if there's an active background task still generating.
+					for (const message of Object.values(history.messages)) {
+						if (message && message.role === 'assistant') {
+							if (hasActiveTasks && message.id === history.currentId) {
+								// Active task running for this message — don't force done
+							} else {
+								message.done = true;
+							}
+						}
+					}
 				}
 
 				await tick();

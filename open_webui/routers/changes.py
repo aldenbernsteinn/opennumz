@@ -212,3 +212,242 @@ async def git_log(
         })
 
     return {'has_git': True, 'commits': commits}
+
+
+@router.get('/{server_id}/current-branch')
+async def current_branch(
+    server_id: str,
+    request: Request,
+    cwd: str = '.',
+    user=Depends(get_verified_user),
+):
+    """Get the current branch name."""
+    connection, err = _resolve_terminal_connection(request, server_id, user)
+    if err:
+        return JSONResponse({'error': err}, status_code=404 if 'not found' in err else 403)
+
+    result = await _run_command_on_terminal(
+        request, connection, server_id,
+        'git branch --show-current 2>/dev/null || echo __NO_GIT__',
+        cwd=cwd or None,
+    )
+    if 'error' in result:
+        return JSONResponse(result, status_code=502)
+
+    output = (result.get('output') or result.get('stdout') or '').strip()
+    if output == '__NO_GIT__':
+        return {'branch': ''}
+    return {'branch': output}
+
+
+@router.get('/{server_id}/branches')
+async def list_branches(
+    server_id: str,
+    request: Request,
+    cwd: str = '.',
+    user=Depends(get_verified_user),
+):
+    """List local and remote branches sorted by most recent commit."""
+    connection, err = _resolve_terminal_connection(request, server_id, user)
+    if err:
+        return JSONResponse({'error': err}, status_code=404 if 'not found' in err else 403)
+
+    result = await _run_command_on_terminal(
+        request, connection, server_id,
+        "git branch -a --sort=-committerdate --format='%(refname:short)\t%(upstream:short)\t%(HEAD)\t%(committerdate:relative)' 2>/dev/null || echo __NO_GIT__",
+        cwd=cwd or None,
+    )
+    if 'error' in result:
+        return JSONResponse(result, status_code=502)
+
+    output = (result.get('output') or result.get('stdout') or '').strip()
+    if output == '__NO_GIT__':
+        return {'branches': []}
+
+    branches = []
+    for line in output.split('\n'):
+        if not line:
+            continue
+        parts = line.split('\t')
+        name = parts[0].strip() if len(parts) > 0 else ''
+        upstream = parts[1].strip() if len(parts) > 1 else ''
+        is_current = parts[2].strip() == '*' if len(parts) > 2 else False
+        date = parts[3].strip() if len(parts) > 3 else ''
+        if not name:
+            continue
+        is_remote = name.startswith('origin/')
+        branches.append({
+            'name': name,
+            'upstream': upstream,
+            'current': is_current,
+            'date': date,
+            'remote': is_remote,
+        })
+
+    return {'branches': branches}
+
+
+@router.post('/{server_id}/checkout')
+async def checkout_branch(
+    server_id: str,
+    request: Request,
+    body: dict,
+    user=Depends(get_verified_user),
+):
+    """Switch to a branch or create a new one."""
+    connection, err = _resolve_terminal_connection(request, server_id, user)
+    if err:
+        return JSONResponse({'error': err}, status_code=404 if 'not found' in err else 403)
+
+    branch = body.get('branch', '')
+    create = body.get('create', False)
+    cwd = body.get('cwd', '.')
+
+    if not branch:
+        return JSONResponse({'error': 'No branch specified'}, status_code=400)
+
+    if create:
+        cmd = f'git checkout -b {branch}'
+    else:
+        cmd = f'git checkout {branch}'
+
+    result = await _run_command_on_terminal(
+        request, connection, server_id, cmd, cwd=cwd or None,
+    )
+    if 'error' in result:
+        return JSONResponse(result, status_code=502)
+
+    output = result.get('output') or result.get('stdout') or result.get('stderr') or ''
+    return {'ok': True, 'output': output.strip()}
+
+
+@router.post('/{server_id}/commit')
+async def commit_changes(
+    server_id: str,
+    request: Request,
+    body: dict,
+    user=Depends(get_verified_user),
+):
+    """Stage all changes and commit with a message."""
+    connection, err = _resolve_terminal_connection(request, server_id, user)
+    if err:
+        return JSONResponse({'error': err}, status_code=404 if 'not found' in err else 403)
+
+    message = body.get('message', '').replace("'", "'\\''")  # escape single quotes
+    cwd = body.get('cwd', '.')
+
+    if not message:
+        return JSONResponse({'error': 'No commit message'}, status_code=400)
+
+    cmd = f"git add -A && git commit -m '{message}'"
+
+    result = await _run_command_on_terminal(
+        request, connection, server_id, cmd, cwd=cwd or None,
+    )
+    if 'error' in result:
+        return JSONResponse(result, status_code=502)
+
+    output = result.get('output') or result.get('stdout') or ''
+    return {'ok': True, 'output': output.strip()}
+
+
+@router.post('/{server_id}/push')
+async def push_changes(
+    server_id: str,
+    request: Request,
+    body: dict = {},
+    user=Depends(get_verified_user),
+):
+    """Push to remote."""
+    connection, err = _resolve_terminal_connection(request, server_id, user)
+    if err:
+        return JSONResponse({'error': err}, status_code=404 if 'not found' in err else 403)
+
+    cwd = body.get('cwd', '.')
+    # Try regular push first; if no upstream, set it
+    cmd = "git push 2>&1 || git push -u origin $(git branch --show-current) 2>&1"
+
+    result = await _run_command_on_terminal(
+        request, connection, server_id, cmd, cwd=cwd or None,
+    )
+    if 'error' in result:
+        return JSONResponse(result, status_code=502)
+
+    output = result.get('output') or result.get('stdout') or ''
+    return {'ok': True, 'output': output.strip()}
+
+
+@router.post('/{server_id}/pull')
+async def pull_changes(
+    server_id: str,
+    request: Request,
+    body: dict = {},
+    user=Depends(get_verified_user),
+):
+    """Pull from remote."""
+    connection, err = _resolve_terminal_connection(request, server_id, user)
+    if err:
+        return JSONResponse({'error': err}, status_code=404 if 'not found' in err else 403)
+
+    cwd = body.get('cwd', '.')
+
+    result = await _run_command_on_terminal(
+        request, connection, server_id, 'git pull 2>&1', cwd=cwd or None,
+    )
+    if 'error' in result:
+        return JSONResponse(result, status_code=502)
+
+    output = result.get('output') or result.get('stdout') or ''
+    return {'ok': True, 'output': output.strip()}
+
+
+@router.get('/{server_id}/gitignore')
+async def get_gitignore(
+    server_id: str,
+    request: Request,
+    cwd: str = '.',
+    user=Depends(get_verified_user),
+):
+    """Read .gitignore content."""
+    connection, err = _resolve_terminal_connection(request, server_id, user)
+    if err:
+        return JSONResponse({'error': err}, status_code=404 if 'not found' in err else 403)
+
+    result = await _run_command_on_terminal(
+        request, connection, server_id,
+        'cat .gitignore 2>/dev/null || echo ""',
+        cwd=cwd or None,
+    )
+    if 'error' in result:
+        return JSONResponse(result, status_code=502)
+
+    output = result.get('output') or result.get('stdout') or ''
+    return {'content': output}
+
+
+@router.post('/{server_id}/gitignore')
+async def save_gitignore(
+    server_id: str,
+    request: Request,
+    body: dict,
+    user=Depends(get_verified_user),
+):
+    """Write .gitignore content."""
+    connection, err = _resolve_terminal_connection(request, server_id, user)
+    if err:
+        return JSONResponse({'error': err}, status_code=404 if 'not found' in err else 403)
+
+    content = body.get('content', '')
+    cwd = body.get('cwd', '.')
+
+    # Use heredoc to write content safely
+    escaped = content.replace('\\', '\\\\').replace("'", "'\\''")
+    cmd = f"printf '%s\\n' '{escaped}' > .gitignore"
+
+    result = await _run_command_on_terminal(
+        request, connection, server_id, cmd, cwd=cwd or None,
+    )
+    if 'error' in result:
+        return JSONResponse(result, status_code=502)
+
+    return {'ok': True}

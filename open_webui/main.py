@@ -3018,6 +3018,80 @@ async def list_numz_folders():
     return JSONResponse(result)
 
 
+@app.get('/api/numz/browse')
+async def browse_directory(path: str = '~'):
+    """Browse a directory for the workspace picker. Limited to home tree."""
+    import json as _json
+
+    home = os.path.expanduser('~')
+    target = os.path.expanduser(path)
+    target = os.path.realpath(target)
+
+    # Security: limit to home directory tree
+    if not target.startswith(home):
+        return JSONResponse({'error': 'Access denied'}, status_code=403)
+
+    if not os.path.isdir(target):
+        return JSONResponse({'error': 'Not a directory'}, status_code=404)
+
+    entries = []
+    try:
+        for name in sorted(os.listdir(target)):
+            if name.startswith('.'):
+                continue
+            full = os.path.join(target, name)
+            if os.path.isdir(full):
+                # Check if it's a git repo
+                is_git = os.path.isdir(os.path.join(full, '.git'))
+                entries.append({
+                    'name': name,
+                    'path': full,
+                    'type': 'directory',
+                    'git': is_git,
+                })
+    except PermissionError:
+        pass
+
+    # Parent directory (if not at home)
+    parent = None
+    if target != home:
+        parent = os.path.dirname(target)
+        if not parent.startswith(home):
+            parent = home
+
+    display_path = target.replace(home, '~')
+
+    return {
+        'path': target,
+        'display': display_path,
+        'parent': parent,
+        'entries': entries,
+    }
+
+
+@app.post('/api/numz/mkdir')
+async def mkdir_directory(request: Request):
+    """Create a directory. Limited to home tree."""
+    import json as _json
+    body = await request.json()
+    path = body.get('path', '')
+    if not path:
+        return JSONResponse({'error': 'No path'}, status_code=400)
+
+    home = os.path.expanduser('~')
+    target = os.path.expanduser(path)
+    target = os.path.realpath(target)
+
+    if not target.startswith(home):
+        return JSONResponse({'error': 'Access denied'}, status_code=403)
+
+    try:
+        os.makedirs(target, exist_ok=True)
+        return {'ok': True, 'path': target}
+    except Exception as e:
+        return JSONResponse({'error': str(e)}, status_code=500)
+
+
 # ── numz Code Mode: import session into Open WebUI chat ─────────────────
 
 _numz_chat_map: dict[str, str] = {}

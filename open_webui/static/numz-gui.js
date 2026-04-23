@@ -62,10 +62,42 @@
       scroll.appendChild(messagesEl);
       app.appendChild(scroll);
 
-      // Status line — shows model, workspace, tokens
+      // Status line — shows model, workspace, tokens + panels button
       statusEl = el('div', { id: 'numz-status' });
       var cwdDisplay = cwd ? cwd.replace(/^\/home\/\w+\//, '~/') : '~';
+
+      // Panels toggle button (Files/Git/Overview)
+      var panelsBtn = el('button', { id: 'numz-panels-btn' });
+      panelsBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="15" y1="3" x2="15" y2="21"/></svg>';
+      panelsBtn.title = 'Toggle panels (Files, Git)';
+      panelsBtn.style.cssText = 'background:none;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#888;cursor:pointer;padding:4px 6px;margin-left:auto;display:flex;align-items:center';
+      panelsBtn.addEventListener('click', function() {
+        var numzContainer = document.getElementById('numz-container');
+        var panelOpen = panelsBtn.classList.toggle('active');
+        // Toggle Svelte right panel
+        if (window._numzShowControls) {
+          window._numzShowControls.set(panelOpen);
+        }
+        // Shrink numz container to make room for the Svelte panel
+        if (numzContainer) {
+          numzContainer.style.right = panelOpen ? '400px' : '0';
+        }
+        // Make the Svelte app visible behind (it has the ChatControls)
+        var mainContent = document.querySelector('#app > div');
+        if (mainContent) {
+          mainContent.style.zIndex = panelOpen ? '10000' : '';
+          mainContent.style.position = panelOpen ? 'fixed' : '';
+          mainContent.style.right = panelOpen ? '0' : '';
+          mainContent.style.top = panelOpen ? '0' : '';
+          mainContent.style.bottom = panelOpen ? '0' : '';
+          mainContent.style.width = panelOpen ? '400px' : '';
+          mainContent.style.pointerEvents = panelOpen ? 'auto' : '';
+        }
+        panelsBtn.style.color = panelOpen ? '#fff' : '#888';
+        panelsBtn.style.borderColor = panelOpen ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)';
+      });
       statusEl.innerHTML = '<span class="numz-status-model">numz</span><span class="numz-status-cwd" style="color:#888">' + esc(cwdDisplay) + '</span>';
+      statusEl.appendChild(panelsBtn);
       app.appendChild(statusEl);
 
       // Task/agent tracker — shows running background tasks

@@ -99,12 +99,32 @@
       b.style.background = active ? 'rgba(255,255,255,0.08)' : 'none';
       b.style.color = active ? '#e0e0e0' : '#666';
     });
+    updateNewChatButton();
     if (codeMode) {
       showCodeSessions();
-      // Show numz container if a session was active
       if (_numzContainer) _numzContainer.style.display = '';
     } else {
       hideCodeView();
+    }
+  }
+
+  // Change New Chat button to "New Session" with code icon in code mode
+  function updateNewChatButton() {
+    var link = document.querySelector('#sidebar a[href="/"][aria-label]');
+    if (!link) return;
+    var iconContainer = link.querySelector('div.self-center');
+    if (!iconContainer) return;
+    if (codeMode) {
+      link.setAttribute('aria-label', 'New Session');
+      // Replace icon with terminal/code icon
+      iconContainer.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4.5"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>';
+      // Update tooltip if possible
+      var tooltip = link.closest('[data-tooltip]') || link;
+      tooltip.setAttribute('data-tooltip', 'New Session');
+    } else {
+      link.setAttribute('aria-label', 'New Chat');
+      // Restore original pencil icon
+      iconContainer.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-4.5"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10"/></svg>';
     }
   }
 
@@ -168,44 +188,104 @@
     document.querySelectorAll('[id="sidebar-chat-item"],[id="sidebar-chat-group"],[id="sidebar-folder-button"]').forEach(function(el) { el.style.display = 'none'; });
   }
 
+  var _allCodeSessions = []; // cached for search
+
   function showCodeSessions() {
     hideChatItems();
-    // Keep hiding chat items as Svelte re-renders them
     if (!_chatHideInterval) _chatHideInterval = setInterval(hideChatItems, 500);
 
     var url = '/api/numz/sessions';
     if (folderFilter) url += '?folder=' + encodeURIComponent(folderFilter);
     fetch(url).then(function(r) { return r.json(); }).then(function(sessions) {
-      var list = document.getElementById('numz-sessions-list');
-      if (!list) {
-        list = document.createElement('div');
-        list.id = 'numz-sessions-list';
-        var sidebar = document.getElementById('sidebar');
-        if (!sidebar) return;
-        var scrollArea = sidebar.querySelector('div.relative.flex.flex-col.flex-1');
-        if (scrollArea) scrollArea.appendChild(list);
+      _allCodeSessions = sessions;
+      renderCodeSessions(sessions);
+    });
+  }
+
+  function renderCodeSessions(sessions) {
+    var list = document.getElementById('numz-sessions-list');
+    if (!list) {
+      list = document.createElement('div');
+      list.id = 'numz-sessions-list';
+      var sidebar = document.getElementById('sidebar');
+      if (!sidebar) return;
+      var scrollArea = sidebar.querySelector('div.relative.flex.flex-col.flex-1');
+      if (scrollArea) scrollArea.appendChild(list);
+    }
+    var h = '<div style="padding:4px 8px 6px"><select onchange="window._numzFilterFolder(this.value)" style="width:100%;padding:5px 8px;background:rgba(255,255,255,0.04);color:#ccc;border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-size:12px;cursor:pointer"><option value="">All projects</option>';
+    var folders = {};
+    sessions.forEach(function(s) { if (s.folder && !folders[s.folder]) folders[s.folder] = s.project; });
+    Object.keys(folders).sort().forEach(function(f) {
+      h += '<option value="' + folders[f] + '"' + (folderFilter === folders[f] ? ' selected' : '') + '>' + f + '</option>';
+    });
+    h += '</select></div>';
+    var activeSid = sessionStorage.getItem('numzActiveSession');
+    sessions.forEach(function(s) {
+      var date = new Date(s.updated_at * 1000);
+      var dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+      var selected = s.id === activeSid;
+      // Show folder path (shortened) instead of username
+      var folderDisplay = (s.project || '~').replace(/^\/home\/\w+\//, '~/');
+      var dot = '';
+      if (s.active) { dot = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f59e0b;margin-right:8px;animation:pulse 1.5s ease-in-out infinite"></span>'; }
+      else if (s.live) { dot = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;margin-right:8px"></span>'; }
+      h += '<div class="numz-session-item" data-sid="' + s.id + '" data-cwd="' + esc(s.project || '') + '" style="margin:1px 7px;cursor:pointer;padding:10px 12px;border-radius:10px' + (selected ? ';background:rgba(255,255,255,0.06)' : '') + '">' +
+        '<div style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center" class="text-gray-800 dark:text-gray-200">' + dot + esc(s.title || 'Untitled').substring(0, 50) + '</div>' +
+        '<div style="font-size:11px;margin-top:2px;display:flex;gap:6px" class="text-gray-500"><span style="font-family:monospace">' + esc(folderDisplay) + '</span><span>' + dateStr + '</span></div></div>';
+    });
+    list.innerHTML = h;
+    list.style.display = '';
+  }
+
+  // Intercept sidebar search button in code mode
+  document.addEventListener('click', function(e) {
+    if (!codeMode) return;
+    // The search button is in the sidebar after the new chat button
+    var btn = e.target.closest('button');
+    if (!btn) return;
+    var sidebar = document.getElementById('sidebar');
+    if (!sidebar || !sidebar.contains(btn)) return;
+    // Check if this is the search button (has the magnifying glass SVG)
+    var svg = btn.querySelector('svg path[d*="m21 21-5.197"]');
+    if (!svg) return;
+    e.preventDefault();
+    e.stopPropagation();
+    showCodeSessionSearch();
+  }, true);
+
+  function showCodeSessionSearch() {
+    var existing = document.getElementById('numz-session-search');
+    if (existing) { existing.remove(); return; }
+
+    var sidebar = document.getElementById('sidebar');
+    if (!sidebar) return;
+
+    var searchBox = document.createElement('div');
+    searchBox.id = 'numz-session-search';
+    searchBox.style.cssText = 'padding:4px 8px 8px';
+    searchBox.innerHTML = '<input type="text" placeholder="Search sessions..." style="width:100%;padding:7px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#ccc;font-size:12px;outline:none">';
+
+    var list = document.getElementById('numz-sessions-list');
+    if (list) {
+      list.parentElement.insertBefore(searchBox, list);
+    }
+
+    var input = searchBox.querySelector('input');
+    input.focus();
+    input.addEventListener('input', function() {
+      var q = input.value.toLowerCase();
+      if (!q) {
+        renderCodeSessions(_allCodeSessions);
+        return;
       }
-      var h = '<div style="padding:4px 8px 6px"><select onchange="window._numzFilterFolder(this.value)" style="width:100%;padding:5px 8px;background:rgba(255,255,255,0.04);color:#ccc;border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-size:12px;cursor:pointer"><option value="">All projects</option>';
-      var folders = {};
-      sessions.forEach(function(s) { if (s.folder && !folders[s.folder]) folders[s.folder] = s.project; });
-      Object.keys(folders).sort().forEach(function(f) {
-        h += '<option value="' + folders[f] + '"' + (folderFilter === folders[f] ? ' selected' : '') + '>' + f + '</option>';
+      var filtered = _allCodeSessions.filter(function(s) {
+        var text = ((s.title || '') + ' ' + (s.project || '') + ' ' + (s.folder || '')).toLowerCase();
+        return text.indexOf(q) !== -1;
       });
-      h += '</select></div>';
-      var activeSid = sessionStorage.getItem('numzActiveSession');
-      sessions.forEach(function(s) {
-        var date = new Date(s.updated_at * 1000);
-        var dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-        var selected = s.id === activeSid;
-        var dot = '', status = s.folder || '~';
-        if (s.active) { dot = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f59e0b;margin-right:8px;animation:pulse 1.5s ease-in-out infinite"></span>'; status = 'AI working'; }
-        else if (s.live) { dot = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;margin-right:8px"></span>'; status = 'Active'; }
-        h += '<div class="numz-session-item" data-sid="' + s.id + '" data-cwd="' + esc(s.project || '') + '" style="margin:1px 7px;cursor:pointer;padding:10px 12px;border-radius:10px' + (selected ? ';background:rgba(255,255,255,0.06)' : '') + '">' +
-          '<div style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center" class="text-gray-800 dark:text-gray-200">' + dot + esc(s.title || 'Untitled').substring(0, 50) + '</div>' +
-          '<div style="font-size:11px;margin-top:2px" class="text-gray-500">' + status + ' &middot; ' + dateStr + '</div></div>';
-      });
-      list.innerHTML = h;
-      list.style.display = '';
+      renderCodeSessions(filtered);
+    });
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') { searchBox.remove(); renderCodeSessions(_allCodeSessions); }
     });
   }
 
@@ -225,78 +305,192 @@
     var existing = document.getElementById('numz-workspace-picker');
     if (existing) { existing.remove(); return; }
 
+    // Backdrop
+    var backdrop = document.createElement('div');
+    backdrop.id = 'numz-workspace-backdrop';
+    backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99998';
+    backdrop.addEventListener('click', function() { backdrop.remove(); picker.remove(); });
+    document.body.appendChild(backdrop);
+
     var picker = document.createElement('div');
     picker.id = 'numz-workspace-picker';
-    picker.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:400px;max-height:500px;background:#1a1a1a;border:1px solid rgba(255,255,255,0.1);border-radius:14px;z-index:9999;padding:20px;font-family:monospace;box-shadow:0 16px 48px rgba(0,0,0,0.6);overflow-y:auto';
+    picker.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:480px;max-height:600px;background:rgb(32,33,35);border:1px solid rgba(255,255,255,0.08);border-radius:16px;z-index:99999;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,0.7);overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
 
-    // Computer selector at top
-    var h = '<div style="display:flex;gap:8px;margin-bottom:16px">' +
-      '<button class="numz-computer-btn active" data-computer="linux" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(236,72,153,0.3);background:rgba(236,72,153,0.1);color:#ec4899;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">Linux (Remote)</button>' +
-      '<button class="numz-computer-btn" data-computer="mac" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:none;color:#555;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit" disabled title="Coming soon">Mac (Local)</button>' +
-    '</div>';
+    // Header: computer selector + search + breadcrumb
+    var header = document.createElement('div');
+    header.id = 'numz-wp-header';
+    header.style.cssText = 'padding:16px 20px 12px;border-bottom:1px solid rgba(255,255,255,0.06)';
+    header.innerHTML =
+      // Computer selector
+      '<div style="display:flex;gap:8px;margin-bottom:12px">' +
+        '<button class="numz-computer-btn active" data-computer="linux" style="flex:1;padding:7px;border-radius:8px;border:1px solid rgba(236,72,153,0.3);background:rgba(236,72,153,0.1);color:#ec4899;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">Linux (Remote)</button>' +
+        '<button class="numz-computer-btn" data-computer="mac" style="flex:1;padding:7px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:none;color:#555;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit" disabled title="Coming soon">Mac (Coming Soon)</button>' +
+      '</div>' +
+      // Search
+      '<input id="numz-wp-search" type="text" placeholder="Search all folders..." style="width:100%;padding:7px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;color:#ccc;font-size:13px;outline:none;margin-bottom:10px">' +
+      // Breadcrumb
+      '<div id="numz-wp-breadcrumb" style="display:flex;align-items:center;gap:4px;font-size:12px;color:#888;flex-wrap:wrap"></div>';
+    picker.appendChild(header);
 
-    // Search
-    h += '<input id="numz-workspace-search" type="text" placeholder="Search projects..." style="width:100%;padding:8px 12px;background:#111;border:1px solid rgba(255,255,255,0.08);border-radius:8px;color:#ccc;font-size:13px;font-family:monospace;outline:none;margin-bottom:12px">';
-
-    // Project list — loaded from API
-    h += '<div id="numz-workspace-list" style="color:#666;font-size:12px">Loading projects...</div>';
-
-    picker.innerHTML = h;
-
-    // Close on click outside
+    // Search logic — filters current file list
     setTimeout(function() {
-      document.addEventListener('click', function closePicker(ev) {
-        if (!picker.contains(ev.target)) { picker.remove(); document.removeEventListener('click', closePicker); }
-      });
-    }, 100);
-
-    document.body.appendChild(picker);
-
-    // Load projects
-    fetch('/api/numz/folders').then(function(r) { return r.json(); }).then(function(folders) {
-      var listEl = document.getElementById('numz-workspace-list');
-      if (!listEl) return;
-      var fh = '';
-      folders.forEach(function(f) {
-        var name = f.name || f.path;
-        var path = f.path || '';
-        fh += '<div class="numz-workspace-item" data-path="' + esc(path) + '" style="padding:10px 12px;border-radius:8px;cursor:pointer;margin:2px 0;display:flex;align-items:center;gap:10px" onmouseover="this.style.background=\'rgba(255,255,255,0.04)\'" onmouseout="this.style.background=\'\'">' +
-          '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>' +
-          '<div><div style="color:#ccc;font-size:13px">' + esc(name) + '</div><div style="color:#555;font-size:11px">' + esc(path) + '</div></div></div>';
-      });
-      // Add home directory option
-      fh += '<div class="numz-workspace-item" data-path="/home/aldenb" style="padding:10px 12px;border-radius:8px;cursor:pointer;margin:2px 0;display:flex;align-items:center;gap:10px;border-top:1px solid rgba(255,255,255,0.06);margin-top:8px;padding-top:14px" onmouseover="this.style.background=\'rgba(255,255,255,0.04)\'" onmouseout="this.style.background=\'\'">' +
-        '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>' +
-        '<div style="color:#ccc;font-size:13px">Home (~)</div></div>';
-      listEl.innerHTML = fh;
-
-      // Click handler for workspace items
-      listEl.querySelectorAll('.numz-workspace-item').forEach(function(item) {
-        item.addEventListener('click', function() {
-          var path = item.dataset.path;
-          picker.remove();
-          // Clear selection and start fresh session in chosen workspace
-          document.querySelectorAll('.numz-session-item').forEach(function(el) { el.style.background = ''; });
-          sessionStorage.removeItem('numzActiveSession');
-          ensureNumzContainer();
-          if (window.numzGui) window.numzGui.disconnect();
-          window.numzGui.connect('', path, _numzContainer);
-        });
-      });
-
-      // Search filter
-      var searchEl = document.getElementById('numz-workspace-search');
+      var searchEl = document.getElementById('numz-wp-search');
       if (searchEl) {
         searchEl.addEventListener('input', function() {
           var q = searchEl.value.toLowerCase();
-          listEl.querySelectorAll('.numz-workspace-item').forEach(function(item) {
-            var text = (item.textContent || '').toLowerCase();
-            item.style.display = text.indexOf(q) !== -1 ? '' : 'none';
+          var entries = document.querySelectorAll('#numz-wp-files .numz-wp-entry');
+          entries.forEach(function(entry) {
+            if (entry.dataset.type === 'parent') { entry.style.display = q ? 'none' : ''; return; }
+            var text = (entry.textContent || '').toLowerCase();
+            entry.style.display = text.indexOf(q) !== -1 ? '' : 'none';
           });
         });
-        searchEl.focus();
       }
+    }, 50);
+
+    // Quick access sidebar + file list
+    var body = document.createElement('div');
+    body.style.cssText = 'display:flex;flex:1;min-height:0;overflow:hidden';
+
+    // Sidebar — quick access
+    var sidebar = document.createElement('div');
+    sidebar.style.cssText = 'width:130px;padding:8px;border-right:1px solid rgba(255,255,255,0.06);flex-shrink:0;overflow-y:auto';
+    var quickLinks = [
+      { name: 'Home', path: '~', icon: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>' },
+      { name: 'Desktop', path: '~/Desktop', icon: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>' },
+      { name: 'Documents', path: '~/Documents', icon: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>' },
+    ];
+    quickLinks.forEach(function(link) {
+      var btn = document.createElement('button');
+      btn.style.cssText = 'display:flex;align-items:center;gap:8px;width:100%;padding:6px 8px;border:none;background:none;color:#aaa;font-size:12px;cursor:pointer;border-radius:6px;text-align:left';
+      btn.innerHTML = link.icon + '<span>' + link.name + '</span>';
+      btn.addEventListener('click', function() { navigateTo(link.path); });
+      btn.addEventListener('mouseover', function() { btn.style.background = 'rgba(255,255,255,0.06)'; });
+      btn.addEventListener('mouseout', function() { btn.style.background = ''; });
+      sidebar.appendChild(btn);
     });
+    body.appendChild(sidebar);
+
+    // File list
+    var fileList = document.createElement('div');
+    fileList.id = 'numz-wp-files';
+    fileList.style.cssText = 'flex:1;overflow-y:auto;padding:4px';
+    body.appendChild(fileList);
+
+    picker.appendChild(body);
+
+    // Footer with actions
+    var footer = document.createElement('div');
+    footer.style.cssText = 'padding:12px 20px;border-top:1px solid rgba(255,255,255,0.06);display:flex;justify-content:space-between;align-items:center;gap:8px';
+    footer.innerHTML = '<div id="numz-wp-path" style="font-size:11px;color:#666;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1"></div>' +
+      '<button id="numz-wp-mkdir" style="padding:6px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:none;color:#aaa;font-size:12px;cursor:pointer">New Folder</button>' +
+      '<button id="numz-wp-select" style="padding:6px 16px;border-radius:8px;border:none;background:#e5e5e5;color:#1a1a1a;font-size:12px;font-weight:600;cursor:pointer">Open Here</button>';
+    picker.appendChild(footer);
+
+    document.body.appendChild(picker);
+
+    var currentPath = '~';
+
+    function navigateTo(dirPath) {
+      currentPath = dirPath;
+      fileList.innerHTML = '<div style="padding:20px;text-align:center;color:#555;font-size:12px">Loading...</div>';
+      fetch('/api/numz/browse?path=' + encodeURIComponent(dirPath)).then(function(r) { return r.json(); }).then(function(data) {
+        if (data.error) { fileList.innerHTML = '<div style="padding:20px;text-align:center;color:#ef4444;font-size:12px">' + esc(data.error) + '</div>'; return; }
+        currentPath = data.path;
+
+        // Update breadcrumb
+        var bc = document.getElementById('numz-wp-breadcrumb');
+        if (bc) {
+          var parts = data.display.split('/');
+          var bcHtml = '';
+          var buildPath = '';
+          parts.forEach(function(part, i) {
+            if (!part && i > 0) return;
+            buildPath += (i > 0 ? '/' : '') + part;
+            var p = buildPath;
+            if (i > 0) bcHtml += '<span style="color:#555">/</span>';
+            bcHtml += '<button onclick="document.getElementById(\'numz-wp-files\')._nav(\'' + esc(p) + '\')" style="background:none;border:none;color:#aaa;font-size:12px;cursor:pointer;padding:2px 4px;border-radius:4px" onmouseover="this.style.background=\'rgba(255,255,255,0.06)\'" onmouseout="this.style.background=\'\'">' + esc(part || '~') + '</button>';
+          });
+          bc.innerHTML = bcHtml;
+        }
+
+        // Update path display
+        var pathEl = document.getElementById('numz-wp-path');
+        if (pathEl) pathEl.textContent = data.path;
+
+        // Render entries
+        var h = '';
+        if (data.parent) {
+          h += '<div class="numz-wp-entry" data-path="' + esc(data.parent) + '" data-type="parent" style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;border-radius:8px;margin:1px 0">' +
+            '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>' +
+            '<span style="color:#aaa;font-size:13px">..</span></div>';
+        }
+        data.entries.forEach(function(e) {
+          var icon = e.git
+            ? '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>'
+            : '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
+          var gitBadge = e.git ? '<span style="font-size:9px;padding:1px 5px;border-radius:4px;background:rgba(245,158,11,0.1);color:#f59e0b;margin-left:auto;flex-shrink:0">git</span>' : '';
+          h += '<div class="numz-wp-entry" data-path="' + esc(e.path) + '" data-type="dir" style="display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;border-radius:8px;margin:1px 0">' +
+            icon + '<span style="color:#e5e5e5;font-size:13px">' + esc(e.name) + '</span>' + gitBadge + '</div>';
+        });
+        if (data.entries.length === 0 && !data.parent) {
+          h = '<div style="padding:30px;text-align:center;color:#555;font-size:12px">Empty folder</div>';
+        }
+        fileList.innerHTML = h;
+
+        // Click handlers
+        fileList.querySelectorAll('.numz-wp-entry').forEach(function(entry) {
+          entry.addEventListener('click', function() {
+            navigateTo(entry.dataset.path);
+          });
+          entry.addEventListener('mouseover', function() { entry.style.background = 'rgba(255,255,255,0.04)'; });
+          entry.addEventListener('mouseout', function() { entry.style.background = ''; });
+        });
+
+        // Expose nav function for breadcrumb buttons
+        fileList._nav = navigateTo;
+      });
+    }
+
+    // "Open Here" button — start session in current directory
+    document.getElementById('numz-wp-select').addEventListener('click', function() {
+      backdrop.remove();
+      picker.remove();
+      document.querySelectorAll('.numz-session-item').forEach(function(el) { el.style.background = ''; });
+      sessionStorage.removeItem('numzActiveSession');
+      ensureNumzContainer();
+      if (window.numzGui) window.numzGui.disconnect();
+      window.numzGui.connect('', currentPath, _numzContainer);
+    });
+
+    // "New Folder" button
+    document.getElementById('numz-wp-mkdir').addEventListener('click', function() {
+      var name = prompt('New folder name:');
+      if (!name || !name.trim()) return;
+      var newPath = currentPath + '/' + name.trim();
+      fetch('/api/numz/browse?path=' + encodeURIComponent(currentPath)).then(function() {
+        // Use a simple mkdir via the browse API — we need a separate endpoint
+        // For now, create via fetch to a helper
+        var cmd = 'mkdir -p "' + newPath.replace(/"/g, '\\"') + '"';
+        // Execute mkdir via a POST to a simple endpoint
+        fetch('/api/numz/mkdir', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: newPath })
+        }).then(function() {
+          navigateTo(currentPath);
+        });
+      });
+    });
+
+    // Start at home
+    navigateTo('~');
+
+    // ESC to close
+    function handleEsc(e) {
+      if (e.key === 'Escape') { backdrop.remove(); picker.remove(); document.removeEventListener('keydown', handleEsc); }
+    }
+    document.addEventListener('keydown', handleEsc);
   }
 
   // ── Session click → load into numz-gui ───────────────────────────
