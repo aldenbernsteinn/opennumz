@@ -3069,6 +3069,35 @@ async def browse_directory(path: str = '~'):
     }
 
 
+@app.post('/api/numz/git')
+async def numz_git_command(request: Request):
+    """Run a git command locally in a project directory (for code mode).
+    Limited to home tree. Not proxied through terminal server."""
+    import subprocess as _sp2
+    body = await request.json()
+    cmd = body.get('command', '')
+    cwd = body.get('cwd', '')
+    if not cmd or not cwd:
+        return JSONResponse({'error': 'command and cwd required'}, status_code=400)
+
+    home = os.path.expanduser('~')
+    target = os.path.realpath(os.path.expanduser(cwd))
+    if not target.startswith(home):
+        return JSONResponse({'error': 'Access denied'}, status_code=403)
+
+    try:
+        result = _sp2.run(
+            cmd, shell=True, cwd=target, capture_output=True, text=True, timeout=30,
+        )
+        return {
+            'output': result.stdout,
+            'stderr': result.stderr,
+            'code': result.returncode,
+        }
+    except Exception as e:
+        return JSONResponse({'error': str(e)}, status_code=500)
+
+
 @app.post('/api/numz/mkdir')
 async def mkdir_directory(request: Request):
     """Create a directory. Limited to home tree."""

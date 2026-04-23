@@ -53,6 +53,7 @@
     connect: function(sessionId, cwd, target) {
       target.innerHTML = '';
       var app = el('div', { id: 'numz-app' });
+      var mainWrap = el('div', { id: 'numz-main-wrap' });
 
       // Messages scroll
       var scroll = el('div', { id: 'numz-messages-scroll' });
@@ -60,120 +61,131 @@
       // Spinner created but NOT appended yet — showSpinner appends it to the end each time
       spinnerEl = el('div', { className: 'numz-spinner', style: 'display:none' });
       scroll.appendChild(messagesEl);
-      app.appendChild(scroll);
+      mainWrap.appendChild(scroll);
 
       // Status line — shows model, workspace, tokens + panels button
       statusEl = el('div', { id: 'numz-status' });
       var cwdDisplay = cwd ? cwd.replace(/^\/home\/\w+\//, '~/') : '~';
 
-      // Git + Files buttons in status bar
+      // Git + Files side panels — content pushes over like chat mode's right panel
       var _numzPanelEl = null;
-      var _numzActivePanel = null; // 'git' | 'files' | null
+      var _numzActivePanel = null;
+      var _numzMainWrap = null; // wraps scroll+status+input, shrinks when panel opens
+
+      function gitCmd(command) {
+        return fetch('/api/numz/git', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: command, cwd: _wsCwd || '' })
+        }).then(function(r) { return r.json(); });
+      }
 
       function togglePanel(name) {
-        if (_numzActivePanel === name) {
-          // Close
-          if (_numzPanelEl) { _numzPanelEl.remove(); _numzPanelEl = null; }
-          _numzActivePanel = null;
-          gitBtn.style.color = '#888'; gitBtn.style.borderColor = 'rgba(255,255,255,0.1)';
-          filesBtn.style.color = '#888'; filesBtn.style.borderColor = 'rgba(255,255,255,0.1)';
-          return;
-        }
+        if (_numzActivePanel === name) { closePanel(); return; }
         _numzActivePanel = name;
-        gitBtn.style.color = name === 'git' ? '#fff' : '#888';
-        gitBtn.style.borderColor = name === 'git' ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)';
-        filesBtn.style.color = name === 'files' ? '#fff' : '#888';
-        filesBtn.style.borderColor = name === 'files' ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)';
+        updatePanelBtnStyles();
         if (!_numzPanelEl) {
           _numzPanelEl = el('div', { id: 'numz-side-panel' });
-          _numzPanelEl.style.cssText = 'position:absolute;top:0;right:0;bottom:0;width:320px;background:#111;border-left:1px solid rgba(255,255,255,0.08);z-index:10;overflow-y:auto;font-size:12px';
+          _numzPanelEl.style.cssText = 'width:320px;flex-shrink:0;background:#111;border-left:1px solid rgba(255,255,255,0.08);overflow-y:auto;font-size:12px';
+          // Insert as sibling of main wrap inside the flex row
           app.appendChild(_numzPanelEl);
         }
         if (name === 'git') loadGitPanel();
         else if (name === 'files') loadFilesPanel();
       }
 
+      function closePanel() {
+        if (_numzPanelEl) { _numzPanelEl.remove(); _numzPanelEl = null; }
+        _numzActivePanel = null;
+        updatePanelBtnStyles();
+      }
+
+      function updatePanelBtnStyles() {
+        gitBtn.style.color = _numzActivePanel === 'git' ? '#fff' : '#888';
+        gitBtn.style.borderColor = _numzActivePanel === 'git' ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)';
+        filesBtn.style.color = _numzActivePanel === 'files' ? '#fff' : '#888';
+        filesBtn.style.borderColor = _numzActivePanel === 'files' ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.1)';
+      }
+
       function loadGitPanel() {
         if (!_numzPanelEl) return;
-        _numzPanelEl.innerHTML = '<div style="padding:12px;color:#666">Loading git status...</div>';
-        var token = localStorage.token || '';
-        // We need the terminal server ID — get from the selected terminal
-        var serverId = '';
-        try { serverId = document.querySelector('[data-terminal-id]')?.dataset?.terminalId || ''; } catch(e) {}
-        // Fallback: fetch terminal list
-        fetch('/api/v1/terminals/', { headers: { Authorization: 'Bearer ' + token } })
-          .then(function(r) { return r.json(); })
-          .then(function(terminals) {
-            serverId = (terminals[0] || {}).id || '';
-            if (!serverId) { _numzPanelEl.innerHTML = '<div style="padding:12px;color:#666">No terminal server</div>'; return; }
-            return Promise.all([
-              fetch('/api/v1/changes/' + serverId + '/status', { headers: { Authorization: 'Bearer ' + token } }).then(function(r) { return r.json(); }),
-              fetch('/api/v1/changes/' + serverId + '/current-branch', { headers: { Authorization: 'Bearer ' + token } }).then(function(r) { return r.json(); }),
-              fetch('/api/v1/changes/' + serverId + '/branches', { headers: { Authorization: 'Bearer ' + token } }).then(function(r) { return r.json(); }),
-            ]);
-          })
-          .then(function(results) {
-            if (!results || !_numzPanelEl) return;
-            var status = results[0], branchData = results[1], branchesData = results[2];
-            var h = '<div style="padding:12px 14px;border-bottom:1px solid rgba(255,255,255,0.06)">' +
-              '<div style="display:flex;align-items:center;justify-content:space-between">' +
-              '<span style="font-weight:600;color:#e5e5e5;font-size:13px">Git</span>' +
-              '<span style="font-family:monospace;color:#888;font-size:11px">' + esc(branchData.branch || '?') + '</span></div></div>';
-            // Status
-            var files = (status.modified || []).concat(status.staged || []).concat(status.untracked || []);
-            if (files.length === 0) {
-              h += '<div style="padding:16px;text-align:center;color:#555">Working tree clean</div>';
-            } else {
-              (status.modified || []).forEach(function(f) { h += '<div style="padding:4px 14px;color:#eab308;font-family:monospace;font-size:11px">M ' + esc(f) + '</div>'; });
-              (status.staged || []).forEach(function(f) { h += '<div style="padding:4px 14px;color:#22c55e;font-family:monospace;font-size:11px">S ' + esc(f) + '</div>'; });
-              (status.untracked || []).forEach(function(f) { h += '<div style="padding:4px 14px;color:#666;font-family:monospace;font-size:11px">? ' + esc(f) + '</div>'; });
-            }
-            // Commit & push
-            h += '<div style="padding:10px 14px;border-top:1px solid rgba(255,255,255,0.06)">' +
-              '<div style="display:flex;gap:6px"><input id="numz-git-msg" type="text" placeholder="Commit message..." style="flex:1;padding:6px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:#ccc;font-size:11px;outline:none">' +
-              '<button id="numz-git-commit" style="padding:6px 12px;border-radius:6px;border:none;background:#e5e5e5;color:#1a1a1a;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap">Commit & Push</button></div>' +
-              '<div style="display:flex;gap:6px;margin-top:6px">' +
-              '<button id="numz-git-pull" style="flex:1;padding:5px;border-radius:6px;border:1px solid rgba(255,255,255,0.08);background:none;color:#aaa;font-size:11px;cursor:pointer">Pull</button>' +
-              '<button id="numz-git-push" style="flex:1;padding:5px;border-radius:6px;border:1px solid rgba(255,255,255,0.08);background:none;color:#aaa;font-size:11px;cursor:pointer">Push</button></div></div>';
-            // Branches
-            h += '<div style="padding:8px 14px;border-top:1px solid rgba(255,255,255,0.06)"><div style="font-weight:600;color:#aaa;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Branches</div>';
-            (branchesData.branches || []).forEach(function(b) {
-              if (b.name.startsWith('origin/HEAD')) return;
-              var icon = b.current ? '<span style="color:#22c55e;margin-right:6px">●</span>' : (b.remote ? '<span style="color:#555;margin-right:6px">↗</span>' : '<span style="color:#444;margin-right:6px">○</span>');
-              h += '<div style="padding:3px 0;display:flex;align-items:center;justify-content:space-between">' +
-                icon + '<span style="flex:1;font-family:monospace;color:' + (b.current ? '#e5e5e5' : '#888') + ';font-size:11px;overflow:hidden;text-overflow:ellipsis">' + esc(b.name) + '</span>' +
-                '<span style="color:#555;font-size:10px;margin-left:8px">' + esc(b.date || '') + '</span></div>';
-            });
-            h += '</div>';
-            _numzPanelEl.innerHTML = h;
-            // Wire up buttons
-            var commitBtn = document.getElementById('numz-git-commit');
-            if (commitBtn) commitBtn.addEventListener('click', function() {
-              var msg = document.getElementById('numz-git-msg')?.value || '';
-              if (!msg.trim()) return;
-              commitBtn.textContent = '...';
-              fetch('/api/v1/changes/' + serverId + '/commit', { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg }) })
-                .then(function() { return fetch('/api/v1/changes/' + serverId + '/push', { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: '{}' }); })
-                .then(function() { loadGitPanel(); });
-            });
-            var pullBtn = document.getElementById('numz-git-pull');
-            if (pullBtn) pullBtn.addEventListener('click', function() { pullBtn.textContent = '...'; fetch('/api/v1/changes/' + serverId + '/pull', { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: '{}' }).then(function() { loadGitPanel(); }); });
-            var pushBtn = document.getElementById('numz-git-push');
-            if (pushBtn) pushBtn.addEventListener('click', function() { pushBtn.textContent = '...'; fetch('/api/v1/changes/' + serverId + '/push', { method: 'POST', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: '{}' }).then(function() { loadGitPanel(); }); });
+        _numzPanelEl.innerHTML = '<div style="padding:12px;color:#666">Loading...</div>';
+        Promise.all([
+          gitCmd('git status --porcelain 2>/dev/null'),
+          gitCmd('git branch --show-current 2>/dev/null'),
+          gitCmd("git branch -a --sort=-committerdate --format='%(refname:short)\t%(HEAD)\t%(committerdate:relative)' 2>/dev/null"),
+        ]).then(function(results) {
+          if (!_numzPanelEl) return;
+          var statusOut = (results[0].output || '').trim();
+          var branch = (results[1].output || '').trim();
+          var branchLines = (results[2].output || '').trim().split('\n').filter(Boolean);
+          // Header
+          var h = '<div style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between">' +
+            '<span style="font-weight:600;color:#e5e5e5;font-size:13px">Git</span>' +
+            '<div style="display:flex;align-items:center;gap:6px"><span style="font-family:monospace;color:#888;font-size:11px">' + esc(branch) + '</span>' +
+            '<button id="numz-panel-close" style="background:none;border:none;color:#555;cursor:pointer;font-size:16px;padding:0 2px">&times;</button></div></div>';
+          // Status
+          var modified = [], staged = [], untracked = [];
+          statusOut.split('\n').forEach(function(line) {
+            if (line.length < 3) return;
+            var x = line[0], y = line[1], f = line.slice(3).trim();
+            if (x === '?' && y === '?') untracked.push(f);
+            else if ('MADRC'.indexOf(x) >= 0) staged.push(f);
+            if ('MD'.indexOf(y) >= 0) modified.push(f);
           });
+          if (!modified.length && !staged.length && !untracked.length) {
+            h += '<div style="padding:16px;text-align:center;color:#555">Working tree clean</div>';
+          } else {
+            modified.forEach(function(f) { h += '<div style="padding:3px 14px;color:#eab308;font-family:monospace;font-size:11px">M ' + esc(f) + '</div>'; });
+            staged.forEach(function(f) { h += '<div style="padding:3px 14px;color:#22c55e;font-family:monospace;font-size:11px">S ' + esc(f) + '</div>'; });
+            untracked.forEach(function(f) { h += '<div style="padding:3px 14px;color:#555;font-family:monospace;font-size:11px">? ' + esc(f) + '</div>'; });
+          }
+          // Commit & push
+          h += '<div style="padding:10px 14px;border-top:1px solid rgba(255,255,255,0.06)">' +
+            '<div style="display:flex;gap:6px"><input id="numz-git-msg" type="text" placeholder="Commit message..." style="flex:1;padding:6px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:#ccc;font-size:11px;outline:none">' +
+            '<button id="numz-git-commit" style="padding:6px 10px;border-radius:6px;border:none;background:#e5e5e5;color:#1a1a1a;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap">Commit & Push</button></div>' +
+            '<div style="display:flex;gap:6px;margin-top:6px">' +
+            '<button id="numz-git-pull" style="flex:1;padding:5px;border-radius:6px;border:1px solid rgba(255,255,255,0.08);background:none;color:#aaa;font-size:11px;cursor:pointer">Pull</button>' +
+            '<button id="numz-git-push" style="flex:1;padding:5px;border-radius:6px;border:1px solid rgba(255,255,255,0.08);background:none;color:#aaa;font-size:11px;cursor:pointer">Push</button></div></div>';
+          // Branches
+          h += '<div style="padding:8px 14px;border-top:1px solid rgba(255,255,255,0.06)"><div style="font-weight:600;color:#aaa;font-size:10px;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px">Branches</div>';
+          branchLines.forEach(function(line) {
+            var parts = line.split('\t');
+            var name = (parts[0] || '').trim().replace(/^'|'$/g, '');
+            var isCurrent = (parts[1] || '').trim() === '*';
+            var date = (parts[2] || '').trim().replace(/^'|'$/g, '');
+            if (!name || name.startsWith('origin/HEAD')) return;
+            var icon = isCurrent ? '<span style="color:#22c55e;margin-right:6px">●</span>' : (name.startsWith('origin/') ? '<span style="color:#555;margin-right:6px">↗</span>' : '<span style="color:#444;margin-right:6px">○</span>');
+            h += '<div style="padding:3px 0;display:flex;align-items:center">' + icon +
+              '<span style="flex:1;font-family:monospace;color:' + (isCurrent ? '#e5e5e5' : '#888') + ';font-size:11px;overflow:hidden;text-overflow:ellipsis">' + esc(name) + '</span>' +
+              '<span style="color:#555;font-size:10px;margin-left:8px">' + esc(date) + '</span></div>';
+          });
+          h += '</div>';
+          _numzPanelEl.innerHTML = h;
+          // Wire buttons
+          document.getElementById('numz-panel-close')?.addEventListener('click', closePanel);
+          document.getElementById('numz-git-commit')?.addEventListener('click', function() {
+            var msg = document.getElementById('numz-git-msg')?.value || '';
+            if (!msg.trim()) return;
+            this.textContent = '...';
+            gitCmd("git add -A && git commit -m '" + msg.replace(/'/g, "'\\''") + "' && git push 2>&1 || git push -u origin $(git branch --show-current) 2>&1").then(function() { loadGitPanel(); });
+          });
+          document.getElementById('numz-git-pull')?.addEventListener('click', function() { this.textContent = '...'; gitCmd('git pull 2>&1').then(function() { loadGitPanel(); }); });
+          document.getElementById('numz-git-push')?.addEventListener('click', function() { this.textContent = '...'; gitCmd('git push 2>&1 || git push -u origin $(git branch --show-current) 2>&1').then(function() { loadGitPanel(); }); });
+        });
       }
 
       function loadFilesPanel() {
         if (!_numzPanelEl) return;
-        _numzPanelEl.innerHTML = '<div style="padding:12px;color:#666">Loading files...</div>';
-        // Browse the session's cwd
+        _numzPanelEl.innerHTML = '<div style="padding:12px;color:#666">Loading...</div>';
         fetch('/api/numz/browse?path=' + encodeURIComponent(_wsCwd || '~'))
           .then(function(r) { return r.json(); })
           .then(function(data) {
             if (!_numzPanelEl) return;
-            var h = '<div style="padding:12px 14px;border-bottom:1px solid rgba(255,255,255,0.06)">' +
-              '<span style="font-weight:600;color:#e5e5e5;font-size:13px">Files</span>' +
-              '<span style="font-family:monospace;color:#555;font-size:11px;margin-left:8px">' + esc(data.display || '') + '</span></div>';
+            var h = '<div style="padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between">' +
+              '<div><span style="font-weight:600;color:#e5e5e5;font-size:13px">Files</span>' +
+              '<span style="font-family:monospace;color:#555;font-size:11px;margin-left:8px">' + esc(data.display || '') + '</span></div>' +
+              '<button id="numz-panel-close" style="background:none;border:none;color:#555;cursor:pointer;font-size:16px;padding:0 2px">&times;</button></div>';
             if (data.parent) {
               h += '<div class="numz-fp-entry" data-path="' + esc(data.parent) + '" style="padding:6px 14px;cursor:pointer;color:#aaa;font-size:12px">..</div>';
             }
@@ -183,25 +195,23 @@
                 '<span style="color:#888">📁</span><span style="color:#ccc;font-size:12px">' + esc(e.name) + '</span>' + gitBadge + '</div>';
             });
             _numzPanelEl.innerHTML = h;
+            document.getElementById('numz-panel-close')?.addEventListener('click', closePanel);
             _numzPanelEl.querySelectorAll('.numz-fp-entry').forEach(function(entry) {
-              entry.addEventListener('click', function() {
-                _wsCwd = entry.dataset.path;
-                loadFilesPanel();
-              });
+              entry.addEventListener('click', function() { _wsCwd = entry.dataset.path; loadFilesPanel(); });
               entry.addEventListener('mouseover', function() { entry.style.background = 'rgba(255,255,255,0.04)'; });
               entry.addEventListener('mouseout', function() { entry.style.background = ''; });
             });
           });
       }
 
-      // Git button
+      // Git button (branch icon)
       var gitBtn = el('button', { id: 'numz-git-btn' });
       gitBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path fill-rule="evenodd" d="M9.5 6.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0Zm-4 5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0ZM4 8.084V9.4a3 3 0 1 0 1.5.082v-2.17A3.001 3.001 0 0 0 8 4.5h1.586l-.293.293a.5.5 0 0 0 .707.707l1.146-1.146a.5.5 0 0 0 0-.708L10 2.5a.5.5 0 0 0-.707.707L9.586 3.5H8a4.5 4.5 0 0 0-4 2.084Z" clip-rule="evenodd"/></svg>';
       gitBtn.title = 'Git';
       gitBtn.style.cssText = 'background:none;border:1px solid rgba(255,255,255,0.1);border-radius:6px;color:#888;cursor:pointer;padding:4px 6px;display:flex;align-items:center';
       gitBtn.addEventListener('click', function() { togglePanel('git'); });
 
-      // Files button
+      // Files button (folder icon)
       var filesBtn = el('button', { id: 'numz-files-btn' });
       filesBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>';
       filesBtn.title = 'Files';
@@ -214,11 +224,11 @@
       btnGroup.appendChild(gitBtn);
       btnGroup.appendChild(filesBtn);
       statusEl.appendChild(btnGroup);
-      app.appendChild(statusEl);
+      mainWrap.appendChild(statusEl);
 
       // Task/agent tracker — shows running background tasks
       var taskBar = el('div', { id: 'numz-taskbar', style: 'display:none;max-width:52rem;margin:0 auto;width:100%;padding:0 16px' });
-      app.appendChild(taskBar);
+      mainWrap.appendChild(taskBar);
 
       // Input bar
       var inputBar = el('div', { id: 'numz-input-bar', style: 'position:relative' });
@@ -256,7 +266,8 @@
       cmdMenuEl = el('div', { className: 'numz-cmd-menu' });
       inputBar.appendChild(cmdMenuEl);
 
-      app.appendChild(inputBar);
+      mainWrap.appendChild(inputBar);
+      app.appendChild(mainWrap);
       target.appendChild(app);
 
       // Connect WebSocket — auto-reconnects on disconnect
