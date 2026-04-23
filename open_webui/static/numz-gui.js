@@ -8,6 +8,7 @@
   var _toolInputBuffers = {};
   var _spinnerTimer = null;
   var _spinnerStart = 0;
+  var _activeTasks = {}; // task_id → {description, status, tool_name}
 
   // ── Public API ───────────────────────────────────────────────────────
 
@@ -29,6 +30,10 @@
       var cwdDisplay = cwd ? cwd.replace(/^\/home\/\w+\//, '~/') : '~';
       statusEl.innerHTML = '<span class="numz-status-model">numz</span><span class="numz-status-cwd" style="color:#888">' + esc(cwdDisplay) + '</span>';
       app.appendChild(statusEl);
+
+      // Task/agent tracker — shows running background tasks
+      var taskBar = el('div', { id: 'numz-taskbar', style: 'display:none;max-width:52rem;margin:0 auto;width:100%;padding:0 16px' });
+      app.appendChild(taskBar);
 
       // Input bar
       var inputBar = el('div', { id: 'numz-input-bar', style: 'position:relative' });
@@ -121,6 +126,24 @@
     showSpinner('numz');
     if (window._numzUpdateSessionStatus) window._numzUpdateSessionStatus('unread');
     ws.send(JSON.stringify({ type: 'user', message: { role: 'user', content: text } }));
+  }
+
+  function renderTaskBar() {
+    var bar = document.getElementById('numz-taskbar');
+    if (!bar) return;
+    var keys = Object.keys(_activeTasks);
+    if (keys.length === 0) { bar.style.display = 'none'; return; }
+    bar.style.display = '';
+    var h = '';
+    keys.forEach(function(tid) {
+      var t = _activeTasks[tid];
+      h += '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px">' +
+        '<span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:#f59e0b;animation:pulse 1.5s ease-in-out infinite"></span>' +
+        '<span style="color:#f59e0b">' + esc(t.description || 'Agent') + '</span>' +
+        (t.tool_name ? '<span style="color:#555">' + esc(t.tool_name) + '</span>' : '') +
+      '</div>';
+    });
+    bar.innerHTML = h;
   }
 
   function sendInterrupt() {
@@ -404,10 +427,27 @@
     else if (sub === 'hook_started') { showSpinner(ev.hook_name); }
     else if (sub === 'hook_response') { clearSpinner(); }
     else if (sub === 'api_retry') { addSystem('API retry (attempt ' + (ev.attempt || '?') + ')...', 'warning'); }
-    else if (sub === 'task_started') { addSystem('Task started: ' + (ev.description || '')); }
+    else if (sub === 'task_started') {
+      _activeTasks[ev.task_id || Math.random()] = { description: ev.description || 'Agent', status: 'running', tool_name: ev.tool_name || '' };
+      renderTaskBar();
+    }
+    else if (sub === 'task_progress') {
+      var tid = ev.task_id;
+      if (tid && _activeTasks[tid]) {
+        _activeTasks[tid].description = ev.description || _activeTasks[tid].description;
+        _activeTasks[tid].tool_name = ev.last_tool_name || _activeTasks[tid].tool_name;
+        renderTaskBar();
+      }
+    }
     else if (sub === 'task_notification') {
-      var status = ev.status || '';
-      addSystem('Task ' + status + ': ' + (ev.summary || ''), status === 'failed' ? 'error' : '');
+      var tid2 = ev.task_id;
+      if (tid2 && _activeTasks[tid2]) {
+        if (ev.status === 'completed' || ev.status === 'failed' || ev.status === 'stopped') {
+          delete _activeTasks[tid2];
+          renderTaskBar();
+        }
+      }
+      if (ev.summary) addSystem((ev.status === 'failed' ? 'Failed: ' : 'Done: ') + ev.summary, ev.status === 'failed' ? 'error' : '');
     }
   }
 

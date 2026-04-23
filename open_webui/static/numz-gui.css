@@ -183,6 +183,13 @@
 #numz-status .numz-status-tokens { color: #555; }
 #numz-status .numz-status-cost { color: #555; }
 
+/* === Task/Agent tracker bar === */
+#numz-taskbar {
+  border-top: 1px solid var(--numz-border);
+  padding: 4px 16px;
+  font-family: var(--numz-mono);
+}
+
 /* === Input bar === */
 #numz-input-bar {
   border-top: 1px solid var(--numz-border);
