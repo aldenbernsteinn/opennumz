@@ -3117,6 +3117,9 @@ async def numz_websocket(ws: _WS):
            '--output-format', 'stream-json',
            '--input-format', 'stream-json',
            '--verbose']
+    # Resume existing session or start fresh
+    if session_id:
+        cmd += ['--resume', session_id]
 
     # Clean env — only pass what numz needs, strip Open WebUI / Claude vars
     numz_env = {

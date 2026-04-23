@@ -400,7 +400,6 @@
       var cwdInit = ev.cwd ? ev.cwd.replace(/^\/home\/\w+\//, '~/') : '';
       var permMode = ev.permissionMode || 'default';
       statusEl.innerHTML =
-        '<span class="numz-status-model" style="color:#06b6d4">' + esc(model) + '</span>' +
         (cwdInit ? '<span class="numz-status-cwd" style="color:#888">' + esc(cwdInit) + '</span>' : '') +
         (permMode && permMode !== 'default' ? '<span class="numz-status-perm" style="color:#22c55e">' + esc(permMode) + '</span>' : '') +
         '<span class="numz-status-tokens" style="color:#555">' + tools.length + ' tools</span>';
