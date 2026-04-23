@@ -504,8 +504,13 @@
     // Pick random numz word (same as TUI)
     var verb = NUMZ_WORDS[Math.floor(Math.random() * NUMZ_WORDS.length)];
     spinnerEl.style.display = '';
+    // Wrap each character in a span for the shimmer sweep animation
+    var verbChars = '';
+    for (var ci = 0; ci < verb.length; ci++) {
+      verbChars += '<span class="numz-shimmer-char" style="animation-delay:' + (ci * 0.08) + 's">' + esc(verb[ci]) + '</span>';
+    }
     spinnerEl.innerHTML = GLASSES_SVG +
-      '<span class="numz-spinner-verb" style="color:#ec4899">' + esc(verb) + '</span>' +
+      '<span class="numz-spinner-verb">' + verbChars + '<span style="color:#ec4899">…</span></span>' +
       '<span class="numz-spinner-elapsed" style="color:#555;margin-left:8px"></span>';
 
     clearInterval(_spinnerTimer);
