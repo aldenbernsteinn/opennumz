@@ -310,7 +310,12 @@
   function handleInputKey(e) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
     if (e.key === 'Escape') {
-      if (cmdMenuEl && cmdMenuEl.classList.contains('open')) {
+      // Check permission prompt first
+      var openPerm = document.querySelector('.numz-permission');
+      if (openPerm) {
+        var denyBtn = openPerm.querySelector('[data-action="deny"]');
+        if (denyBtn) denyBtn.click();
+      } else if (cmdMenuEl && cmdMenuEl.classList.contains('open')) {
         cmdMenuEl.classList.remove('open');
       } else if (_generating) {
         sendInterrupt();
@@ -321,8 +326,19 @@
   }
 
   // Global ESC handler — works even when input is not focused
+  // Fires for both generating (interrupt) and permission prompts (deny/abort)
   document.addEventListener('keydown', function(e) {
-    if (e.key === 'Escape' && _generating) {
+    if (e.key !== 'Escape') return;
+    // Check if a permission prompt is open — ESC = deny
+    var openPerm = document.querySelector('.numz-permission');
+    if (openPerm) {
+      var denyBtn = openPerm.querySelector('[data-action="deny"]');
+      if (denyBtn) denyBtn.click();
+      e.preventDefault();
+      return;
+    }
+    // Otherwise interrupt if generating
+    if (_generating) {
       sendInterrupt();
       e.preventDefault();
     }
@@ -773,27 +789,57 @@
     }
 
     var perm = el('div', { className: 'numz-permission' });
+
+    // Feedback input for deny — tell numz what to do differently
     perm.innerHTML =
       '<div class="numz-permission-title">' + title + '</div>' +
       (detail ? '<div style="' + detailStyle + '">' + detail + '</div>' : '') +
+      '<div style="font-size:12px;color:#888;margin-bottom:10px">Do you want to proceed?</div>' +
       '<div class="numz-permission-btns">' +
-        '<button class="numz-perm-allow" data-action="allow">Allow</button>' +
-        '<button class="numz-perm-deny" data-action="deny">Deny</button>' +
-        '<button class="numz-perm-always" data-action="always">Always allow</button>' +
+        '<button class="numz-perm-allow" data-action="allow">Yes</button>' +
+        '<button class="numz-perm-always" data-action="always">Yes, always</button>' +
+        '<button class="numz-perm-deny" data-action="deny">No</button>' +
+      '</div>' +
+      '<div id="numz-perm-feedback-' + ev.request_id + '" style="display:none;margin-top:8px">' +
+        '<input type="text" placeholder="Tell numz what to do differently..." style="width:100%;padding:6px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:#ccc;font-size:11px;outline:none">' +
+        '<button style="margin-top:4px;padding:4px 12px;border-radius:6px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.08);color:#ef4444;font-size:11px;cursor:pointer" data-action="deny-with-feedback">Send</button>' +
       '</div>';
 
-    perm.querySelectorAll('button').forEach(function(btn) {
+    function sendPermResponse(action, feedback) {
+      if (ws && ws.readyState === 1) {
+        var resp = { behavior: action === 'deny' ? 'deny' : 'allow' };
+        if (action === 'always') {
+          resp.updatedPermissions = [{ type: 'addRules', rules: [{ toolName: tool }], behavior: 'allow', destination: 'localSettings' }];
+        }
+        if (action === 'deny' && feedback) {
+          resp.message = feedback;
+        }
+        ws.send(JSON.stringify({
+          type: 'control_response',
+          request_id: ev.request_id,
+          response: { subtype: 'success', request_id: ev.request_id, response: resp }
+        }));
+      }
+      perm.remove();
+      if (window._numzUpdateSessionStatus) window._numzUpdateSessionStatus('working');
+    }
+
+    perm.querySelectorAll('button[data-action]').forEach(function(btn) {
       btn.addEventListener('click', function() {
         var action = btn.dataset.action;
-        if (ws && ws.readyState === 1) {
-          ws.send(JSON.stringify({
-            type: 'control_response',
-            request_id: ev.request_id,
-            response: { type: 'can_use_tool', allowed: action !== 'deny', remember: action === 'always' }
-          }));
+        if (action === 'deny') {
+          // Show feedback input
+          var fb = document.getElementById('numz-perm-feedback-' + ev.request_id);
+          if (fb) {
+            fb.style.display = '';
+            fb.querySelector('input').focus();
+          }
+        } else if (action === 'deny-with-feedback') {
+          var fbInput = perm.querySelector('#numz-perm-feedback-' + ev.request_id + ' input');
+          sendPermResponse('deny', fbInput ? fbInput.value : '');
+        } else {
+          sendPermResponse(action);
         }
-        perm.remove();
-        if (window._numzUpdateSessionStatus) window._numzUpdateSessionStatus('working');
       });
     });
 
