@@ -2596,7 +2596,7 @@ async def serve_quiz():
 @app.get('/code')
 @app.get('/code.html')
 async def serve_code():
-    code_path = os.path.join(FRONTEND_BUILD_DIR, 'code.html')
+    code_path = os.path.join(STATIC_DIR, 'code.html')
     if os.path.isfile(code_path):
         return FileResponse(code_path, media_type='text/html')
     raise HTTPException(status_code=404)
@@ -3111,7 +3111,7 @@ async def numz_websocket(ws: _WS):
 
     # Get session info from query params
     session_id = ws.query_params.get('session')
-    cwd = ws.query_params.get('cwd', os.path.expanduser('~'))
+    cwd = ws.query_params.get('cwd', '') or os.path.expanduser('~')
 
     # Build numz command
     cmd = ['/usr/local/bin/numz',
@@ -3139,38 +3139,50 @@ async def numz_websocket(ws: _WS):
             while proc.poll() is None:
                 line = await loop.run_in_executor(None, proc.stdout.readline)
                 if not line:
+                    logging.info('[numz-ws] stdout EOF')
                     break
                 line = line.strip()
                 if not line:
                     continue
                 try:
-                    # Validate it's JSON before sending
                     _json.loads(line)
                     await ws.send_text(line)
-                except (ValueError, Exception):
-                    pass
-        except Exception:
-            pass
+                except Exception as e:
+                    logging.error(f'[numz-ws] send error: {e}')
+            logging.info(f'[numz-ws] read_stdout done, proc.poll={proc.poll()}')
+        except Exception as e:
+            logging.error(f'[numz-ws] read_stdout exception: {e}')
 
     async def read_ws():
         """Forward WebSocket messages → numz stdin."""
         try:
             while True:
                 data = await ws.receive_text()
+                logging.info(f'[numz-ws] got from browser: {data[:80]}')
                 if proc.poll() is not None:
+                    logging.info('[numz-ws] proc dead, breaking')
                     break
                 proc.stdin.write(data + '\n')
                 proc.stdin.flush()
+                logging.info('[numz-ws] wrote to stdin')
         except _WSDisconnect:
-            pass
-        except Exception:
-            pass
+            logging.info('[numz-ws] browser disconnected')
+        except Exception as e:
+            logging.error(f'[numz-ws] read_ws exception: {e}')
 
-    # Run both directions concurrently
+    logging.info('[numz-ws] starting tasks')
     try:
-        await _aio.gather(read_stdout(), read_ws())
-    except Exception:
-        pass
+        stdout_task = _aio.create_task(read_stdout())
+        ws_task = _aio.create_task(read_ws())
+        done, pending = await _aio.wait(
+            [stdout_task, ws_task],
+            return_when=_aio.FIRST_COMPLETED
+        )
+        logging.info(f'[numz-ws] first completed: {[t.get_name() for t in done]}, cancelling {len(pending)}')
+        for task in pending:
+            task.cancel()
+    except Exception as e:
+        logging.error(f'[numz-ws] gather error: {e}')
     finally:
         _numz_ws_procs.pop(ws_id, None)
         proc.terminate()

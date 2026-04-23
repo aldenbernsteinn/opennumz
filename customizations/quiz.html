@@ -119,6 +119,7 @@ body{font-family:-apple-system,system-ui,sans-serif;background:#1a1a1a;color:#ce
   <div class="bar">
     <a href="/">&larr; Chat</a>
     <h1>COGS 101C</h1>
+    <button onclick="toggleOverview()" style="padding:4px 12px;border-radius:8px;border:1px solid #333;background:none;color:#9a9a9a;font-size:13px;cursor:pointer;font-family:inherit">Overview</button>
     <span class="prog" id="prog">0/43</span>
   </div>
   <div class="progress-wrap">
@@ -507,6 +508,122 @@ function renderMd(s){
 }
 
 render();
+
+var _overviewVisible = false;
+function toggleOverview() {
+  _overviewVisible = !_overviewVisible;
+  if (_overviewVisible) {
+    document.getElementById('main').innerHTML = OVERVIEW_HTML;
+  } else {
+    render();
+  }
+}
+
+var OVERVIEW_HTML = '<div class="card" style="margin-top:8px">' +
+  '<h2 style="color:#fff;font-size:22px;margin-bottom:20px;font-weight:700">Lecture 1: Language in Broad Perspective</h2>' +
+  '<p style="color:#888;font-size:14px;margin-bottom:28px">Course intro — the big picture of human language, its diversity, its history, and its future.</p>' +
+
+  '<div style="margin-bottom:28px">' +
+    '<h3 style="color:#fff;font-size:16px;margin-bottom:12px">1. We know roughly where and when language began, but not fully how or why</h3>' +
+    '<ul style="color:#b0b0b0;font-size:15px;line-height:1.8;padding-left:20px">' +
+      '<li>Language likely originated <strong style="color:#fff">100,000+ years ago</strong> in Africa</li>' +
+      '<li>The <strong style="color:#fff">Austronesian dispersal</strong> from Taiwan (~3000 BC) shows how language families spread across the Pacific to Madagascar and Hawaii</li>' +
+      '<li>We can trace language families and map their spread, but the exact origin of language itself — how and why it emerged — remains one of the biggest unsolved questions</li>' +
+    '</ul>' +
+  '</div>' +
+
+  '<div style="margin-bottom:28px">' +
+    '<h3 style="color:#fff;font-size:16px;margin-bottom:12px">2. Languages vary wildly in sounds, structure, and whether sound is even involved</h3>' +
+    '<ul style="color:#b0b0b0;font-size:15px;line-height:1.8;padding-left:20px">' +
+      '<li>Languages range from <strong style="color:#fff">11 phonemes</strong> (Rotokas) to <strong style="color:#fff">100+</strong> (Taa) — massive variation in the sounds used</li>' +
+      '<li>Some languages are <strong style="color:#fff">analytic</strong> (English — separate words for each meaning), others are <strong style="color:#fff">polysynthetic</strong> (Cayuga — an entire sentence packed into one word: "I will plant potatoes for them again")</li>' +
+      '<li>About <strong style="color:#fff">200 sign languages</strong> exist globally — full natural languages with their own grammar, not translations of spoken ones. Sound is not required for language.</li>' +
+      '<li>Some languages lack word classes others consider basic — <strong style="color:#fff">Lao has no adjectives</strong></li>' +
+      '<li>Languages even differ in basic concepts: some Aboriginal languages have <strong style="color:#fff">no word for "seven"</strong>, while Yeli Dnye has a single word meaning "20 days from today"</li>' +
+    '</ul>' +
+  '</div>' +
+
+  '<div style="margin-bottom:28px">' +
+    '<h3 style="color:#fff;font-size:16px;margin-bottom:12px">3. Linguistic diversity has waxed and waned throughout history</h3>' +
+    '<ul style="color:#b0b0b0;font-size:15px;line-height:1.8;padding-left:20px">' +
+      '<li><strong style="color:#fff">Peak: ~12,000 BC</strong> with roughly 100,000 languages — hunter-gatherer bands constantly splintered and spread, allowing languages to evolve independently</li>' +
+      '<li><strong style="color:#fff">Today: ~7,000 languages</strong>, and declining fast. We are in a period of massive language extinction.</li>' +
+      '<li>"Big" languages displace "little" ones — a process accelerated by <strong style="color:#fff">text-based technologies</strong> (writing, printing, internet) that let dominant languages scale</li>' +
+      '<li>Striking correlation: regions with high <strong style="color:#fff">plant biodiversity</strong> (tropical rainforests) also have the highest concentration of distinct human languages</li>' +
+      '<li>Just <strong style="color:#fff">23 languages</strong> are spoken by over half the world\'s population (4.1 billion people) — massive linguistic inequality</li>' +
+      '<li>Papua New Guinea (about the size of California) has <strong style="color:#fff">~850 indigenous languages</strong> vs the US with ~150</li>' +
+    '</ul>' +
+  '</div>' +
+
+  '<div style="margin-bottom:28px">' +
+    '<h3 style="color:#fff;font-size:16px;margin-bottom:12px">4. The invention of writing was a "seismic event"</h3>' +
+    '<ul style="color:#b0b0b0;font-size:15px;line-height:1.8;padding-left:20px">' +
+      '<li>Writing invented <strong style="color:#fff">~3300 BC in Mesopotamia</strong> — originally for <strong style="color:#fff">accounting</strong> (3D clay tokens for tracking goods evolved into 2D marks on tablets), not for recording speech</li>' +
+      '<li>Accelerated language extinction by giving big languages tools to scale and displace smaller ones</li>' +
+      '<li>Changed human brains: a patch of the <strong style="color:#fff">visual cortex</strong> originally evolved for recognizing object contours in nature was "recycled" for reading — the <strong style="color:#fff">Visual Word Form Area</strong></li>' +
+      '<li>Global literacy only <strong style="color:#fff">surpassed illiteracy after 1950</strong> — incredibly recent in human history</li>' +
+      '<li>The <strong style="color:#fff">overbite</strong> (~3,600 years ago, from shift to softer agricultural diet) enabled <strong style="color:#fff">labiodental sounds</strong> like /f/ and /v/ by allowing top teeth to rest on the bottom lip</li>' +
+    '</ul>' +
+  '</div>' +
+
+  '<div style="margin-bottom:16px">' +
+    '<h3 style="color:#fff;font-size:16px;margin-bottom:12px">5. Face-to-face language is giving way to mediated forms</h3>' +
+    '<ul style="color:#b0b0b0;font-size:15px;line-height:1.8;padding-left:20px">' +
+      '<li>The <strong style="color:#fff">"primordial" form</strong> of language is in-person, face-to-face interaction</li>' +
+      '<li>Writing, printing, the internet, and texting are all <strong style="color:#fff">mediated forms</strong> of language — communication without the other person being physically present</li>' +
+      '<li>This shift from face-to-face to mediated communication is <strong style="color:#fff">extremely recent</strong> in the ~100,000-year history of human language, and its consequences are still unfolding</li>' +
+      '<li>The <strong style="color:#fff">McGurk Effect</strong> shows how deeply tied language is to face-to-face context — visual information (seeing someone\'s mouth) actually changes what sounds we hear</li>' +
+    '</ul>' +
+  '</div>' +
+
+  '</div>' +
+
+  '<div class="card" style="margin-top:24px">' +
+  '<h2 style="color:#fff;font-size:22px;margin-bottom:20px;font-weight:700">Lecture 2: Animal Communication Systems</h2>' +
+  '<p style="color:#888;font-size:14px;margin-bottom:28px">Understanding human language by comparing it to how animals communicate — what makes us unique?</p>' +
+
+  '<div style="margin-bottom:28px">' +
+    '<h3 style="color:#fff;font-size:16px;margin-bottom:12px">1. We understand human language by comparing it to animal communication</h3>' +
+    '<ul style="color:#b0b0b0;font-size:15px;line-height:1.8;padding-left:20px">' +
+      '<li>To understand what makes human language special, researchers study animal communication systems "in the wild" — how animals naturally communicate without human training</li>' +
+      '<li><strong style="color:#fff">Honeybees</strong> use the waggle dance to communicate the distance and direction of food sources — a sophisticated system, but rigid and limited to one topic</li>' +
+      '<li><strong style="color:#fff">Vervet monkeys</strong> have specific alarm calls for different predators (eagle vs. snake vs. leopard) — showing basic referentiality (sounds that refer to specific things in the world)</li>' +
+      '<li><strong style="color:#fff">Campbell\'s monkeys</strong> go further: they combine root calls with affixes (e.g., "hok" + "oo") to create new meanings — demonstrating basic compositionality (building complex meaning from smaller parts)</li>' +
+    '</ul>' +
+  '</div>' +
+
+  '<div style="margin-bottom:28px">' +
+    '<h3 style="color:#fff;font-size:16px;margin-bottom:12px">2. Key properties of human language are rare in animal systems</h3>' +
+    '<ul style="color:#b0b0b0;font-size:15px;line-height:1.8;padding-left:20px">' +
+      '<li><strong style="color:#fff">Referentiality</strong> — using a sound to refer to something in the world. Animals have basic referentiality (vervet alarm calls), but only humans have full referentiality for anything</li>' +
+      '<li><strong style="color:#fff">Displaced referentiality</strong> — communicating about things not physically present. The honeybee\'s waggle dance does this (the food source is far away), making it a rare animal example</li>' +
+      '<li><strong style="color:#fff">Compositionality</strong> — building complex meanings from smaller parts. Campbell\'s monkeys show a basic version, but human language does this at massive scale (infinite sentences from finite words)</li>' +
+      '<li>These properties exist on a <strong style="color:#fff">continuum</strong> — it\'s not that animals have zero and humans have 100%, but humans are dramatically further along on every dimension</li>' +
+    '</ul>' +
+  '</div>' +
+
+  '<div style="margin-bottom:28px">' +
+    '<h3 style="color:#fff;font-size:16px;margin-bottom:12px">3. Human communication stands out in two key ways</h3>' +
+    '<ul style="color:#b0b0b0;font-size:15px;line-height:1.8;padding-left:20px">' +
+      '<li><strong style="color:#fff">Abstract referentiality</strong> — humans can refer to abstract concepts, invisible ideas, or things that don\'t physically exist (justice, love, the future, hypotheticals). No animal system does this.</li>' +
+      '<li><strong style="color:#fff">Breadth of meaning</strong> — humans can talk about literally anything. Animal communication is typically limited to a narrow set of topics (food location, predator warnings, mating). Humans discuss philosophy, recipes, quantum physics, and gossip — all with the same system.</li>' +
+      '<li>These two properties — abstractness and breadth — are what truly separate human language from everything else in the animal kingdom</li>' +
+    '</ul>' +
+  '</div>' +
+
+  '<div style="margin-bottom:16px">' +
+    '<h3 style="color:#fff;font-size:16px;margin-bottom:12px">4. Teaching animals human language has had limited success</h3>' +
+    '<ul style="color:#b0b0b0;font-size:15px;line-height:1.8;padding-left:20px">' +
+      '<li><strong style="color:#fff">Viki</strong> (chimpanzee) — raised as a human child in a human home. Could only physically produce 4 words. Proved apes lack the vocal tract anatomy for speech, leading researchers to try sign language instead.</li>' +
+      '<li><strong style="color:#fff">Washoe</strong> (chimpanzee) — taught ASL manually. Learned signs but used them almost exclusively for <strong style="color:#fff">making requests</strong> (food, tickles, toys) — not sharing observations or discussing ideas.</li>' +
+      '<li><strong style="color:#fff">Nim Chimpsky</strong> (chimpanzee) — another ASL study. Same pattern: mostly requests, no real sentence structure or grammar.</li>' +
+      '<li><strong style="color:#fff">Kanzi</strong> (bonobo) — the most impressive case. Learned 200+ lexigrams <strong style="color:#fff">spontaneously without explicit instruction</strong> — just by observing. But still limited compared to human children.</li>' +
+      '<li>The overall conclusion: apes can learn symbols and associate them with meanings, but their <strong style="color:#fff">communicative intention</strong> is almost entirely self-serving (requests). They don\'t use language the way humans do — to share knowledge, tell stories, or discuss abstract ideas.</li>' +
+    '</ul>' +
+  '</div>' +
+
+  '<div style="text-align:center;padding:16px 0"><button class="btn btn-primary" onclick="toggleOverview()">Back to Quiz</button></div>' +
+'</div>';
 </script>
 </body>
 </html>
