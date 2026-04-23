@@ -2776,6 +2776,42 @@ async def list_numz_sessions(folder: str = None):
         except (OSError, Exception):
             pass
 
+    # Read session titles from JSONL tail (custom-title or ai-title entries)
+    session_titles = {}
+    for sid, info in sessions.items():
+        proj = info.get('project', '')
+        if not proj:
+            continue
+        sanitized = proj.replace('/', '-').lstrip('-')
+        jsonl_path = os.path.expanduser(f'~/.numz/projects/{sanitized}/{sid}.jsonl')
+        try:
+            with open(jsonl_path, 'rb') as jf:
+                # Read last 32KB to find title entries near the end
+                jf.seek(0, 2)
+                fsize = jf.tell()
+                jf.seek(max(0, fsize - 32768))
+                tail = jf.read().decode('utf-8', errors='replace')
+            # Scan for title entries (last one wins)
+            for tline in tail.split('\n'):
+                if '"type":"custom-title"' in tline:
+                    try:
+                        td = _json.loads(tline)
+                        ct = td.get('customTitle', '')
+                        if ct:
+                            session_titles[sid] = ct
+                    except Exception:
+                        pass
+                elif '"type":"ai-title"' in tline:
+                    try:
+                        td = _json.loads(tline)
+                        at = td.get('aiTitle', '')
+                        if at and sid not in session_titles:
+                            session_titles[sid] = at
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
     # Detect active sessions (JSONL recently written = AI working)
     now = time.time()
     active_sessions = set()
@@ -2798,7 +2834,7 @@ async def list_numz_sessions(folder: str = None):
             continue
         result.append({
             'id': sid,
-            'title': info['first_msg'][:80] or 'Untitled',
+            'title': session_titles.get(sid, info['first_msg'][:80]) or 'Untitled',
             'project': info['project'],
             'folder': os.path.basename(info['project']) if info['project'] else '',
             'message_count': info['messages'],
