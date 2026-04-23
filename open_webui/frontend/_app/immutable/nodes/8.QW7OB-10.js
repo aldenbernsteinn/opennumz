@@ -1,0 +1,2 @@
+import"../chunks/CWj6FrbW.js";import"../chunks/69_IOA4Y.js";import{p as e,o as p,b as m,s as n,e as i}from"../chunks/CIb488To.js";import{i as c}from"../chunks/VqDkL8Yj.js";import{t as u}from"../chunks/IZDjkD1V.js";import{C as f}from"../chunks/C4r6Eh7H.js";import{p as g}from"../chunks/CYrdPqVy.js";function d(o,s){e(s,!1);const r=()=>i(g,"$page",t),[t,a]=n();p(()=>{r().url.searchParams.get("error")&&u.error(r().url.searchParams.get("error")||"An unknown error occurred.")}),c(),f(o,{}),m(),a()}export{d as component};
+//# sourceMappingURL=8.QW7OB-10.js.map
