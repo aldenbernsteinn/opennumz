@@ -101,7 +101,7 @@
     });
     updateNewChatButton();
     if (codeMode) {
-      showCodeSessions();
+      showCodeSessions(true); // autoOpen most recent session
       if (_numzContainer) _numzContainer.style.display = '';
     } else {
       hideCodeView();
@@ -146,7 +146,10 @@
   function updateContainerPosition() {
     if (!_numzContainer) return;
     var sidebar = document.getElementById('sidebar');
-    _numzContainer.style.left = (sidebar ? sidebar.offsetWidth : 0) + 'px';
+    var sidebarWidth = sidebar ? sidebar.offsetWidth : 0;
+    // On mobile (narrow), sidebar is hidden — go full width
+    if (window.innerWidth < 768) sidebarWidth = 0;
+    _numzContainer.style.left = sidebarWidth + 'px';
   }
 
   // Update active session status in sidebar from WebSocket events
@@ -190,7 +193,7 @@
 
   var _allCodeSessions = []; // cached for search
 
-  function showCodeSessions() {
+  function showCodeSessions(autoOpen) {
     hideChatItems();
     if (!_chatHideInterval) _chatHideInterval = setInterval(hideChatItems, 500);
 
@@ -199,6 +202,25 @@
     fetch(url).then(function(r) { return r.json(); }).then(function(sessions) {
       _allCodeSessions = sessions;
       renderCodeSessions(sessions);
+
+      // Auto-open most recent session if none is active
+      if (autoOpen && sessions.length > 0) {
+        var activeSid = sessionStorage.getItem('numzActiveSession');
+        if (!activeSid || !sessions.some(function(s) { return s.id === activeSid; })) {
+          var most = sessions[0]; // already sorted by most recent
+          sessionStorage.setItem('numzActiveSession', most.id);
+          openSession(most.id, most.project || '');
+          // Highlight it
+          setTimeout(function() {
+            var item = document.querySelector('.numz-session-item[data-sid="' + most.id + '"]');
+            if (item) item.style.background = 'rgba(255,255,255,0.06)';
+          }, 100);
+        } else if (activeSid) {
+          // Re-open the previously active session
+          var prev = sessions.find(function(s) { return s.id === activeSid; });
+          if (prev) openSession(prev.id, prev.project || '');
+        }
+      }
     });
   }
 
