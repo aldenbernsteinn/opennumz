@@ -241,6 +241,9 @@
     e.preventDefault(); e.stopPropagation();
     _permModeIdx = (_permModeIdx + 1) % _permModes.length;
     var mode = _permModes[_permModeIdx];
+    // Store for WebSocket URL
+    var numzModeMap = { auto: 'default', bypass: 'dangerously-skip-permissions', plan: 'plan', none: 'default' };
+    window._numzPermMode = numzModeMap[mode] || 'default';
     var statusEl = document.getElementById('numz-status');
     if (statusEl) {
       var permEl = statusEl.querySelector('.numz-status-perm');

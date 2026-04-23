@@ -52,7 +52,7 @@
 
       // Store session info for lazy WebSocket connection (connects on first send)
       // Force ws: (no SSL on this server) and use the page host
-      window._numzWsUrl = 'ws://' + location.host + '/api/numz/ws?session=' + (sessionId || '') + '&cwd=' + encodeURIComponent(cwd || '');
+      window._numzWsUrl = 'ws://' + location.host + '/api/numz/ws?session=' + (sessionId || '') + '&cwd=' + encodeURIComponent(cwd || '') + '&perm=' + (window._numzPermMode || 'default');
       window._numzSessionId = sessionId;
       inputEl.focus();
     },
@@ -94,22 +94,44 @@
 
   function ensureWebSocket(callback) {
     if (ws && ws.readyState === 1) { callback(); return; }
-    if (ws) ws.close();
-    console.log('numz-gui: connecting to', window._numzWsUrl);
-    ws = new WebSocket(window._numzWsUrl);
+    if (ws) { try { ws.close(); } catch(e) {} }
+    var url = window._numzWsUrl;
+    if (!url) {
+      url = 'ws://' + location.host + '/api/numz/ws?session=' + (window._numzSessionId || '') + '&cwd=';
+      window._numzWsUrl = url;
+    }
+    addSystem('Connecting...');
+    try {
+      ws = new WebSocket(url);
+    } catch(e) {
+      addSystem('Failed to connect: ' + e.message, 'error');
+      return;
+    }
     ws.onopen = function() {
-      console.log('numz-gui: connected');
+      // Remove "Connecting..." message
+      if (messagesEl) {
+        var msgs = messagesEl.querySelectorAll('.numz-msg-system');
+        for (var i = msgs.length - 1; i >= 0; i--) {
+          if (msgs[i].textContent === 'Connecting...') { msgs[i].remove(); break; }
+        }
+      }
+      // Remove "Sending to numz..." message
+      if (messagesEl) {
+        var msgs2 = messagesEl.querySelectorAll('.numz-msg-system');
+        for (var j = msgs2.length - 1; j >= 0; j--) {
+          if (msgs2[j].textContent === 'Sending to numz...') { msgs2[j].remove(); break; }
+        }
+      }
       callback();
     };
     ws.onmessage = function(e) {
-      console.log('numz-gui: got message', e.data.substring(0, 80));
-      try { handleEvent(JSON.parse(e.data)); } catch(err) { console.error('numz-gui: parse error', err); }
+      try { handleEvent(JSON.parse(e.data)); } catch(err) {}
     };
     ws.onclose = function(e) {
-      addSystem('ws closed (code ' + e.code + ')');
+      addSystem('Disconnected (code ' + e.code + ')');
     };
-    ws.onerror = function(e) {
-      addSystem('ws error', 'error');
+    ws.onerror = function() {
+      addSystem('Connection error', 'error');
     };
   }
 

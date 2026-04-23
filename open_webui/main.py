@@ -3112,20 +3112,35 @@ async def numz_websocket(ws: _WS):
     # Get session info from query params
     session_id = ws.query_params.get('session')
     cwd = ws.query_params.get('cwd', '') or os.path.expanduser('~')
+    perm_mode = ws.query_params.get('perm', 'default')
 
     # Build numz command
     cmd = ['/usr/local/bin/numz',
            '--output-format', 'stream-json',
            '--input-format', 'stream-json',
-           '--verbose']
-    if session_id:
-        cmd += ['--resume', '--session-id', session_id]
+           '--verbose',
+           '--permission-mode', perm_mode]
+
+    # Clean env — only pass what numz needs, strip Open WebUI / Claude vars
+    numz_env = {
+        'PATH': os.environ.get('PATH', '/usr/local/bin:/usr/bin:/bin'),
+        'HOME': os.environ.get('HOME', '/home/aldenb'),
+        'TERM': 'dumb',
+        'LANG': os.environ.get('LANG', 'en_US.UTF-8'),
+        'USER': os.environ.get('USER', 'aldenb'),
+        'SHELL': os.environ.get('SHELL', '/bin/bash'),
+        'BUN_INSTALL': os.environ.get('BUN_INSTALL', os.path.expanduser('~/.bun')),
+    }
+    # Log stderr to file for debugging
+    stderr_log = open('/tmp/numz-ws-stderr.log', 'a')
+    stderr_log.write(f'\n--- {time.strftime("%H:%M:%S")} spawning numz ---\n')
+    stderr_log.flush()
 
     proc = _sp.Popen(
         cmd,
-        stdin=_sp.PIPE, stdout=_sp.PIPE, stderr=_sp.DEVNULL,
+        stdin=_sp.PIPE, stdout=_sp.PIPE, stderr=stderr_log,
         cwd=cwd,
-        env={**os.environ, 'TERM': 'dumb'},
+        env=numz_env,
         text=True, bufsize=1
     )
 
@@ -3172,17 +3187,9 @@ async def numz_websocket(ws: _WS):
 
     logging.info('[numz-ws] starting tasks')
     try:
-        stdout_task = _aio.create_task(read_stdout())
-        ws_task = _aio.create_task(read_ws())
-        done, pending = await _aio.wait(
-            [stdout_task, ws_task],
-            return_when=_aio.FIRST_COMPLETED
-        )
-        logging.info(f'[numz-ws] first completed: {[t.get_name() for t in done]}, cancelling {len(pending)}')
-        for task in pending:
-            task.cancel()
+        await _aio.gather(read_stdout(), read_ws())
     except Exception as e:
-        logging.error(f'[numz-ws] gather error: {e}')
+        logging.error(f'[numz-ws] error: {e}')
     finally:
         _numz_ws_procs.pop(ws_id, None)
         proc.terminate()
