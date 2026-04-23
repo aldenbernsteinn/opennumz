@@ -118,8 +118,8 @@
       addSystem('Not connected', 'error');
       return;
     }
-    // Show spinner immediately (like TUI shows while waiting for response)
     showSpinner('numz');
+    if (window._numzUpdateSessionStatus) window._numzUpdateSessionStatus('unread');
     ws.send(JSON.stringify({ type: 'user', message: { role: 'user', content: text } }));
   }
 
@@ -252,6 +252,7 @@
 
   // Handle complete assistant messages (non-streaming — numz sends these)
   function handleAssistant(ev) {
+    if (window._numzUpdateSessionStatus) window._numzUpdateSessionStatus('working');
     var msg = ev.message || {};
     var content = msg.content;
     if (!Array.isArray(content)) return;
@@ -419,6 +420,7 @@
   }
 
   function handleResult(ev) {
+    if (window._numzUpdateSessionStatus) window._numzUpdateSessionStatus('idle');
     finishAssistant();
 
     if (ev.subtype === 'success') {
@@ -457,6 +459,7 @@
   // ── Permission prompts ───────────────────────────────────────────────
 
   function handleControlRequest(ev) {
+    if (window._numzUpdateSessionStatus) window._numzUpdateSessionStatus('approval');
     if (!ev.request_id) return;
     var req = ev.request || {};
     if (req.type !== 'can_use_tool') return;

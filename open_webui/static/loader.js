@@ -149,6 +149,27 @@
     _numzContainer.style.left = (sidebar ? sidebar.offsetWidth : 0) + 'px';
   }
 
+  // Update active session status in sidebar from WebSocket events
+  window._numzUpdateSessionStatus = function(status) {
+    var activeSid = sessionStorage.getItem('numzActiveSession');
+    if (!activeSid) return;
+    var item = document.querySelector('.numz-session-item[data-sid="' + activeSid + '"]');
+    if (!item) return;
+    var statusEl = item.querySelector('.numz-session-status');
+    if (!statusEl) {
+      statusEl = document.createElement('span');
+      statusEl.className = 'numz-session-status';
+      statusEl.style.cssText = 'font-size:10px;margin-left:auto;padding:2px 6px;border-radius:4px';
+      item.querySelector('div:first-child').appendChild(statusEl);
+    }
+    var labels = { working: 'working', approval: 'needs approval', unread: 'sent', idle: '' };
+    var colors = { working: '#f59e0b', approval: '#ef4444', unread: '#06b6d4', idle: '' };
+    var bgs = { working: 'rgba(245,158,11,0.1)', approval: 'rgba(239,68,68,0.1)', unread: 'rgba(6,182,212,0.1)', idle: 'transparent' };
+    statusEl.textContent = labels[status] || '';
+    statusEl.style.color = colors[status] || '';
+    statusEl.style.background = bgs[status] || '';
+  };
+
   function hideCodeView() {
     if (_numzContainer) _numzContainer.style.display = 'none';
     if (window.numzGui) window.numzGui.disconnect();
