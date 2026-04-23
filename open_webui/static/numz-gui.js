@@ -217,19 +217,11 @@
       thinkEl = el('div', { className: 'numz-thinking' });
       thinkEl.innerHTML =
         '<div class="numz-thinking-header" onclick="this.parentElement.classList.toggle(\'open\')">' +
-          '<span class="numz-thinking-spinner" style="display:inline-block;width:14px;height:14px;border:2px solid #333;border-top-color:#06b6d4;border-radius:50%;animation:numz-spin-wheel 0.6s linear infinite;margin-right:8px;vertical-align:middle"></span>' +
           '<span class="numz-thinking-label">Thinking</span>' +
-          '<span class="numz-thinking-elapsed" style="color:#555;margin-left:8px"></span>' +
           '<span style="margin-left:auto;color:#444;font-size:10px">&#9660;</span>' +
         '</div>' +
         '<div class="numz-thinking-content"></div>';
       currentAssistantEl.insertBefore(thinkEl, currentAssistantEl.firstChild);
-      // Update elapsed time
-      _thinkingTimer = setInterval(function() {
-        var elapsed = Math.round((Date.now() - _thinkingStartTime) / 1000);
-        var elEl = thinkEl.querySelector('.numz-thinking-elapsed');
-        if (elEl) elEl.textContent = elapsed + 's';
-      }, 1000);
     }
     thinkEl.querySelector('.numz-thinking-content').textContent = streamingThinking;
     scrollBottom();

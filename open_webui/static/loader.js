@@ -318,14 +318,12 @@ window.toggleSettingsOverlay = function() {
     '<div style="display:flex;gap:16px">' +
       '<div style="flex:1">' +
         '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Chat</div>' +
-        '<div style="font-size:12px;color:#06b6d4;margin-bottom:8px">qwen3.6-35b-a3b</div>' +
-        '<div style="color:#444;font-size:11px">via Open WebUI</div>' +
+        '<div style="font-size:12px;color:#06b6d4">qwen3.6-35b-a3b</div>' +
       '</div>' +
       '<div style="width:1px;background:rgba(255,255,255,0.06)"></div>' +
       '<div style="flex:1">' +
         '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Code</div>' +
-        '<div style="font-size:12px;color:#ec4899;margin-bottom:8px">qwen3.6-35b-a3b</div>' +
-        '<div style="color:#444;font-size:11px">via numz TUI</div>' +
+        '<div style="font-size:12px;color:#ec4899">qwen3.6-35b-a3b</div>' +
       '</div>' +
     '</div>';
 
