@@ -3291,6 +3291,8 @@ async def _numz_stdout_reader(session_id: str, proc: _sp.Popen):
                 _numz_session_state[session_id] = 'idle'
             elif evt_type == 'stream_event':
                 _numz_session_state[session_id] = 'generating'
+            elif evt_type == 'control_request':
+                logging.info(f'[numz-ws] PERMISSION REQUEST for {session_id}: {line[:200]}')
 
             # Buffer the event
             buf.append(line)
@@ -3319,6 +3321,7 @@ def _numz_spawn_process(session_id: str, cwd: str) -> _sp.Popen:
     cmd = ['/usr/local/bin/numz',
            '--output-format', 'stream-json',
            '--input-format', 'stream-json',
+           '--permission-prompt-tool', 'stdio',
            '--verbose']
     if session_id and not session_id.startswith('_new_'):
         cmd += ['--resume', session_id]
@@ -3408,9 +3411,11 @@ async def numz_websocket(ws: _WS):
             if proc.poll() is not None:
                 logging.info('[numz-ws] proc dead, breaking')
                 break
-            # Track state from user messages
+            # Track state from messages
             try:
                 msg = _json.loads(data)
+                if msg.get('type') == 'control_response':
+                    logging.info(f'[numz-ws] PERMISSION RESPONSE from browser: {data[:200]}')
                 if msg.get('type') == 'user':
                     _numz_session_state[session_id] = 'generating'
             except Exception:

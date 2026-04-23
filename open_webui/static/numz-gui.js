@@ -326,9 +326,11 @@
   }
 
   // Global ESC handler — works even when input is not focused
-  // Fires for both generating (interrupt) and permission prompts (deny/abort)
   document.addEventListener('keydown', function(e) {
     if (e.key !== 'Escape') return;
+    // Only handle if we're in code mode (numz container visible)
+    var nc = document.getElementById('numz-container');
+    if (!nc || nc.style.display === 'none') return;
     // Check if a permission prompt is open — ESC = deny
     var openPerm = document.querySelector('.numz-permission');
     if (openPerm) {
@@ -337,11 +339,9 @@
       e.preventDefault();
       return;
     }
-    // Otherwise interrupt if generating
-    if (_generating) {
-      sendInterrupt();
-      e.preventDefault();
-    }
+    // Always send interrupt — works for generating, permission waits, everything
+    sendInterrupt();
+    e.preventDefault();
   });
 
   function sendMessage() {
@@ -380,7 +380,10 @@
   }
 
   function sendInterrupt() {
-    if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: 'interrupt' }));
+    if (ws && ws.readyState === 1) {
+      ws.send(JSON.stringify({ type: 'interrupt' }));
+      setGenerating(false);
+    }
   }
 
   function showCmdMenu() {
@@ -420,6 +423,7 @@
     else if (type === 'system') handleSystemEvent(ev);
     else if (type === 'result') handleResult(ev);
     else if (type === 'control_request') handleControlRequest(ev);
+    else console.log('[numz-gui] unhandled event type:', type, JSON.stringify(ev).substring(0, 200));
   }
 
   // ── Stream events ────────────────────────────────────────────────────
@@ -736,10 +740,11 @@
   // ── Permission prompts ───────────────────────────────────────────────
 
   function handleControlRequest(ev) {
+    console.log('[numz-gui] control_request received:', JSON.stringify(ev).substring(0, 500));
     if (window._numzUpdateSessionStatus) window._numzUpdateSessionStatus('approval');
-    if (!ev.request_id) return;
+    if (!ev.request_id) { console.log('[numz-gui] no request_id, bailing'); return; }
     var req = ev.request || {};
-    if (req.subtype !== 'can_use_tool' && req.type !== 'can_use_tool') return;
+    if (req.subtype !== 'can_use_tool' && req.type !== 'can_use_tool') { console.log('[numz-gui] not can_use_tool, subtype=' + req.subtype + ' type=' + req.type); return; }
 
     var tool = req.tool_name || 'Unknown';
     var input = req.input || {};
