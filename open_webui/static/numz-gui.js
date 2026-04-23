@@ -789,23 +789,58 @@
     }
 
     var perm = el('div', { className: 'numz-permission' });
+    var permOptions = [
+      { key: '1', action: 'allow', label: 'Yes', cls: 'numz-perm-allow' },
+      { key: '2', action: 'always', label: 'Yes, always', cls: 'numz-perm-always' },
+      { key: '3', action: 'deny', label: 'No', cls: 'numz-perm-deny' },
+    ];
+    var permFocused = 0;
+    var permInFeedback = false;
 
-    // Feedback input for deny — tell numz what to do differently
     perm.innerHTML =
       '<div class="numz-permission-title">' + title + '</div>' +
       (detail ? '<div style="' + detailStyle + '">' + detail + '</div>' : '') +
-      '<div style="font-size:12px;color:#888;margin-bottom:10px">Do you want to proceed?</div>' +
-      '<div class="numz-permission-btns">' +
-        '<button class="numz-perm-allow" data-action="allow">Yes</button>' +
-        '<button class="numz-perm-always" data-action="always">Yes, always</button>' +
-        '<button class="numz-perm-deny" data-action="deny">No</button>' +
-      '</div>' +
+      '<div style="font-size:12px;color:#888;margin-bottom:8px">Do you want to proceed? <span style="color:#555">(↑↓ or 1-3)</span></div>' +
+      '<div class="numz-permission-opts"></div>' +
       '<div id="numz-perm-feedback-' + ev.request_id + '" style="display:none;margin-top:8px">' +
-        '<input type="text" placeholder="Tell numz what to do differently..." style="width:100%;padding:6px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:#ccc;font-size:11px;outline:none">' +
-        '<button style="margin-top:4px;padding:4px 12px;border-radius:6px;border:1px solid rgba(239,68,68,0.3);background:rgba(239,68,68,0.08);color:#ef4444;font-size:11px;cursor:pointer" data-action="deny-with-feedback">Send</button>' +
+        '<input type="text" placeholder="Tell numz what to do differently..." style="width:100%;padding:6px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:6px;color:#ccc;font-size:12px;outline:none">' +
       '</div>';
 
+    var optsEl = perm.querySelector('.numz-permission-opts');
+    permOptions.forEach(function(opt, i) {
+      var row = el('div', { className: 'numz-perm-opt ' + opt.cls });
+      row.dataset.action = opt.action;
+      row.dataset.idx = i;
+      row.innerHTML = '<span class="numz-perm-key">' + opt.key + '</span><span>' + opt.label + '</span>';
+      row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:8px 12px;cursor:pointer;border-radius:8px;margin:2px 0;transition:background 0.1s';
+      row.addEventListener('click', function() { selectPermOption(i); });
+      row.addEventListener('mouseover', function() { permFocused = i; highlightPermOption(); });
+      optsEl.appendChild(row);
+    });
+
+    function highlightPermOption() {
+      optsEl.querySelectorAll('.numz-perm-opt').forEach(function(r, i) {
+        r.style.background = i === permFocused ? 'rgba(255,255,255,0.06)' : '';
+        r.querySelector('.numz-perm-key').style.background = i === permFocused ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.03)';
+      });
+    }
+
+    function selectPermOption(idx) {
+      var opt = permOptions[idx];
+      if (!opt) return;
+      if (opt.action === 'deny') {
+        // Show feedback input
+        permInFeedback = true;
+        var fb = document.getElementById('numz-perm-feedback-' + ev.request_id);
+        if (fb) { fb.style.display = ''; var inp = fb.querySelector('input'); if (inp) inp.focus(); }
+      } else {
+        sendPermResponse(opt.action);
+      }
+    }
+
     function sendPermResponse(action, feedback) {
+      // Remove keyboard handler
+      document.removeEventListener('keydown', permKeyHandler);
       if (ws && ws.readyState === 1) {
         var resp = { behavior: action === 'deny' ? 'deny' : 'allow' };
         if (action === 'always') {
@@ -824,25 +859,33 @@
       if (window._numzUpdateSessionStatus) window._numzUpdateSessionStatus('working');
     }
 
-    perm.querySelectorAll('button[data-action]').forEach(function(btn) {
-      btn.addEventListener('click', function() {
-        var action = btn.dataset.action;
-        if (action === 'deny') {
-          // Show feedback input
-          var fb = document.getElementById('numz-perm-feedback-' + ev.request_id);
-          if (fb) {
-            fb.style.display = '';
-            fb.querySelector('input').focus();
-          }
-        } else if (action === 'deny-with-feedback') {
+    // Keyboard navigation
+    function permKeyHandler(e) {
+      if (permInFeedback) {
+        // In feedback mode — Enter sends, Escape cancels
+        if (e.key === 'Enter') {
           var fbInput = perm.querySelector('#numz-perm-feedback-' + ev.request_id + ' input');
           sendPermResponse('deny', fbInput ? fbInput.value : '');
-        } else {
-          sendPermResponse(action);
+          e.preventDefault();
+        } else if (e.key === 'Escape') {
+          sendPermResponse('deny', '');
+          e.preventDefault();
         }
-      });
-    });
+        return;
+      }
+      if (e.key === 'ArrowUp' || e.key === 'k') { permFocused = Math.max(0, permFocused - 1); highlightPermOption(); e.preventDefault(); }
+      else if (e.key === 'ArrowDown' || e.key === 'j') { permFocused = Math.min(permOptions.length - 1, permFocused + 1); highlightPermOption(); e.preventDefault(); }
+      else if (e.key === 'Enter') { selectPermOption(permFocused); e.preventDefault(); }
+      else if (e.key === '1') { selectPermOption(0); e.preventDefault(); }
+      else if (e.key === '2') { selectPermOption(1); e.preventDefault(); }
+      else if (e.key === '3') { selectPermOption(2); e.preventDefault(); }
+      else if (e.key === 'Escape') { sendPermResponse('deny', ''); e.preventDefault(); }
+      else if (e.key === 'y' || e.key === 'Y') { selectPermOption(0); e.preventDefault(); }
+      else if (e.key === 'n' || e.key === 'N') { selectPermOption(2); e.preventDefault(); }
+    }
+    document.addEventListener('keydown', permKeyHandler);
 
+    highlightPermOption();
     messagesEl.appendChild(perm);
     scrollBottom();
   }

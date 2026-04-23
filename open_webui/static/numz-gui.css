@@ -146,22 +146,17 @@
 }
 .numz-permission-title { color: var(--numz-orange); font-weight: 600; margin-bottom: 8px; }
 .numz-permission-desc { color: #888; font-size: 12px; margin-bottom: 12px; }
-.numz-permission-btns { display: flex; gap: 8px; }
-.numz-perm-allow {
-  padding: 6px 16px; border-radius: 8px;
-  border: 1px solid rgba(34,197,94,0.3); background: rgba(34,197,94,0.08);
-  color: var(--numz-green); cursor: pointer; font-size: 13px; font-weight: 600;
+.numz-permission-opts { display: flex; flex-direction: column; }
+.numz-perm-opt { font-size: 13px; }
+.numz-perm-key {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 5px;
+  background: rgba(255,255,255,0.03); font-size: 11px; font-weight: 700;
+  color: #666; flex-shrink: 0;
 }
-.numz-perm-deny {
-  padding: 6px 16px; border-radius: 8px;
-  border: 1px solid rgba(239,68,68,0.3); background: rgba(239,68,68,0.08);
-  color: var(--numz-red); cursor: pointer; font-size: 13px; font-weight: 600;
-}
-.numz-perm-always {
-  padding: 6px 16px; border-radius: 8px;
-  border: 1px solid var(--numz-border); background: rgba(255,255,255,0.04);
-  color: #999; cursor: pointer; font-size: 13px;
-}
+.numz-perm-allow { color: var(--numz-green); }
+.numz-perm-always { color: #999; }
+.numz-perm-deny { color: var(--numz-red); }
 
 /* === Spinner / Progress === */
 .numz-spinner {
