@@ -120,6 +120,8 @@
       addSystem('Not connected', 'error');
       return;
     }
+    // Show spinner immediately (like TUI shows while waiting for response)
+    showSpinner('numz');
     ws.send(JSON.stringify({ type: 'user', message: { role: 'user', content: text } }));
   }
 
