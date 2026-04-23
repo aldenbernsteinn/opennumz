@@ -63,10 +63,14 @@
       app.appendChild(inputBar);
       target.appendChild(app);
 
-      // Store session info for lazy WebSocket connection (connects on first send)
-      // Force ws: (no SSL on this server) and use the page host
-      window._numzWsUrl = 'ws://' + location.host + '/api/numz/ws?session=' + (sessionId || '') + '&cwd=' + encodeURIComponent(cwd || '') + '&perm=' + (window._numzPermMode || 'default');
+      // Connect WebSocket immediately — one connection per session, stays alive
+      var url = 'ws://' + location.host + '/api/numz/ws?session=' + (sessionId || '') + '&cwd=' + encodeURIComponent(cwd || '');
       window._numzSessionId = sessionId;
+      ws = new WebSocket(url);
+      ws.onopen = function() { inputEl.focus(); };
+      ws.onmessage = function(e) { try { handleEvent(JSON.parse(e.data)); } catch(err) {} };
+      ws.onclose = function() {};
+      ws.onerror = function() { addSystem('Connection failed', 'error'); };
       inputEl.focus();
     },
 
@@ -105,66 +109,18 @@
     }
   }
 
-  function ensureWebSocket(callback) {
-    if (ws && ws.readyState === 1) { callback(); return; }
-    if (ws) { try { ws.close(); } catch(e) {} }
-    var url = window._numzWsUrl;
-    if (!url) {
-      url = 'ws://' + location.host + '/api/numz/ws?session=' + (window._numzSessionId || '') + '&cwd=';
-      window._numzWsUrl = url;
-    }
-    addSystem('Connecting...');
-    try {
-      ws = new WebSocket(url);
-    } catch(e) {
-      addSystem('Failed to connect: ' + e.message, 'error');
-      return;
-    }
-    ws.onopen = function() {
-      // Remove "Connecting..." message
-      if (messagesEl) {
-        var msgs = messagesEl.querySelectorAll('.numz-msg-system');
-        for (var i = msgs.length - 1; i >= 0; i--) {
-          if (msgs[i].textContent === 'Connecting...') { msgs[i].remove(); break; }
-        }
-      }
-      // Remove "Sending to numz..." message
-      if (messagesEl) {
-        var msgs2 = messagesEl.querySelectorAll('.numz-msg-system');
-        for (var j = msgs2.length - 1; j >= 0; j--) {
-          if (msgs2[j].textContent === 'Sending to numz...') { msgs2[j].remove(); break; }
-        }
-      }
-      callback();
-    };
-    ws.onmessage = function(e) {
-      try { handleEvent(JSON.parse(e.data)); } catch(err) {}
-    };
-    ws.onclose = function(e) {
-      addSystem('Disconnected (code ' + e.code + ')');
-    };
-    ws.onerror = function() {
-      addSystem('Connection error', 'error');
-    };
-  }
-
   function sendMessage() {
-    if (!inputEl) { console.error('numz-gui: no inputEl'); return; }
+    if (!inputEl) return;
     var text = inputEl.value.trim();
     if (!text) return;
     inputEl.value = '';
     if (cmdMenuEl) cmdMenuEl.classList.remove('open');
     addUser(text);
-    addSystem('Sending to numz...');
-    ensureWebSocket(function() {
-      // Remove "Sending" message
-      if (messagesEl) {
-        var msgs = messagesEl.querySelectorAll('.numz-msg-system');
-        var last = msgs[msgs.length - 1];
-        if (last && last.textContent === 'Sending to numz...') last.remove();
-      }
-      ws.send(JSON.stringify({ type: 'user', message: { role: 'user', content: text } }));
-    });
+    if (!ws || ws.readyState !== 1) {
+      addSystem('Not connected', 'error');
+      return;
+    }
+    ws.send(JSON.stringify({ type: 'user', message: { role: 'user', content: text } }));
   }
 
   function sendInterrupt() {
@@ -446,7 +402,7 @@
       statusEl.innerHTML =
         '<span class="numz-status-model" style="color:#06b6d4">' + esc(model) + '</span>' +
         (cwdInit ? '<span class="numz-status-cwd" style="color:#888">' + esc(cwdInit) + '</span>' : '') +
-        '<span class="numz-status-perm" style="color:#22c55e">' + esc(permMode) + '</span>' +
+        (permMode && permMode !== 'default' ? '<span class="numz-status-perm" style="color:#22c55e">' + esc(permMode) + '</span>' : '') +
         '<span class="numz-status-tokens" style="color:#555">' + tools.length + ' tools</span>';
     }
     else if (sub === 'tool_progress') { showSpinner(ev.tool_name); }
