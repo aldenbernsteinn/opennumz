@@ -3323,6 +3323,7 @@ def _numz_spawn_process(session_id: str, cwd: str) -> _sp.Popen:
            '--input-format', 'stream-json',
            '--permission-prompt-tool', 'stdio',
            '--verbose']
+    logging.info(f'[numz-ws] spawning with cmd: {" ".join(cmd)}')
     if session_id and not session_id.startswith('_new_'):
         cmd += ['--resume', session_id]
 
