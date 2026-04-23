@@ -86,7 +86,7 @@
 }
 .numz-tool-header:hover { background: rgba(255,255,255,0.02); }
 .numz-tool-marker { color: #505050; font-size: 14px; }
-.numz-tool-name { color: var(--numz-lavender); font-weight: 600; font-size: 13px; }
+.numz-tool-name { color: var(--numz-pink); font-weight: 600; font-size: 13px; }
 .numz-tool-desc { color: #888; font-size: 12px; margin-left: auto; max-width: 50%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .numz-tool-spinner {
   color: var(--numz-cyan); font-size: 11px;

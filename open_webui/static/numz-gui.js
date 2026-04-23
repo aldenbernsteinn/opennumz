@@ -353,8 +353,7 @@
     var spinner = card.querySelector('.numz-tool-spinner');
     if (spinner) spinner.remove();
 
-    // Open the card to show result
-    card.classList.add('open');
+    // Keep card closed by default — user can click to expand
 
     var outputEl = card.querySelector('.numz-tool-output');
     if (!outputEl) return;
