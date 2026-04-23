@@ -723,20 +723,63 @@
     if (window._numzUpdateSessionStatus) window._numzUpdateSessionStatus('approval');
     if (!ev.request_id) return;
     var req = ev.request || {};
-    if (req.type !== 'can_use_tool') return;
+    if (req.subtype !== 'can_use_tool' && req.type !== 'can_use_tool') return;
 
     var tool = req.tool_name || 'Unknown';
     var input = req.input || {};
-    var desc = input.description || input.command || input.file_path || JSON.stringify(input).substring(0, 200);
+
+    // Format the permission message like the TUI does for each tool type
+    var title = '';
+    var detail = '';
+    var detailStyle = 'color:#888;font-size:12px;font-family:monospace;white-space:pre-wrap;max-height:200px;overflow-y:auto;margin-bottom:12px;padding:8px 10px;background:rgba(255,255,255,0.02);border-radius:6px';
+
+    switch (tool) {
+      case 'Write':
+      case 'FileWriteTool':
+        title = 'Write to ' + esc(input.file_path || '');
+        detail = input.content ? esc((input.content || '').substring(0, 500)) + (input.content.length > 500 ? '\n...' : '') : '';
+        break;
+      case 'Edit':
+      case 'FileEditTool':
+        title = 'Edit ' + esc(input.file_path || '');
+        var old_s = input.old_string || input.old_text || '';
+        var new_s = input.new_string || input.new_text || '';
+        detail = '<span style="color:#ef4444">- ' + esc(old_s.substring(0, 300)) + '</span>\n<span style="color:#22c55e">+ ' + esc(new_s.substring(0, 300)) + '</span>';
+        break;
+      case 'Bash':
+      case 'BashTool':
+        title = 'Run command';
+        detail = esc(input.command || input.description || '');
+        break;
+      case 'Read':
+      case 'FileReadTool':
+        title = 'Read ' + esc(input.file_path || '');
+        break;
+      case 'Glob':
+      case 'GlobTool':
+        title = 'Search files: ' + esc(input.pattern || '');
+        break;
+      case 'Grep':
+      case 'GrepTool':
+        title = 'Search content: ' + esc(input.pattern || '');
+        break;
+      case 'NotebookEdit':
+      case 'NotebookEditTool':
+        title = 'Edit notebook ' + esc(input.notebook_path || '');
+        break;
+      default:
+        title = tool;
+        detail = esc(input.description || input.command || input.file_path || JSON.stringify(input).substring(0, 300));
+    }
 
     var perm = el('div', { className: 'numz-permission' });
     perm.innerHTML =
-      '<div class="numz-permission-title">Permission: ' + esc(tool) + '</div>' +
-      '<div class="numz-permission-desc">' + esc(desc) + '</div>' +
+      '<div class="numz-permission-title">' + title + '</div>' +
+      (detail ? '<div style="' + detailStyle + '">' + detail + '</div>' : '') +
       '<div class="numz-permission-btns">' +
         '<button class="numz-perm-allow" data-action="allow">Allow</button>' +
         '<button class="numz-perm-deny" data-action="deny">Deny</button>' +
-        '<button class="numz-perm-always" data-action="always">Always</button>' +
+        '<button class="numz-perm-always" data-action="always">Always allow</button>' +
       '</div>';
 
     perm.querySelectorAll('button').forEach(function(btn) {
@@ -750,6 +793,7 @@
           }));
         }
         perm.remove();
+        if (window._numzUpdateSessionStatus) window._numzUpdateSessionStatus('working');
       });
     });
 
