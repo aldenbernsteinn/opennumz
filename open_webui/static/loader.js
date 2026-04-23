@@ -36,27 +36,7 @@
 
 
 // === Thinking toggle ===
-(function() {
-  var thinkingOn = false, apiToken = null;
-  function getToken() {
-    if (apiToken) return Promise.resolve(apiToken);
-    return fetch('/api/v1/auths/signin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: 'admin@localhost', password: 'admin' }) })
-      .then(function(r) { return r.json(); }).then(function(d) { apiToken = d.token; return apiToken; });
-  }
-  var BASE = 'You are a helpful assistant named numz. Never say you are Qwen or made by Alibaba.\n\nThe current date and time is {{CURRENT_DATETIME}}.';
-  function setThinking(on) { thinkingOn = on; getToken().then(function(t) { fetch('/api/v1/models/model/update', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + t }, body: JSON.stringify({ id: 'numz', name: 'numz', base_model_id: 'numz', params: { system: on ? BASE + '\n\n/think' : BASE }, meta: { description: 'Qwen 3.6 35B-A3B' } }) }); }); }
-  function inject() {
-    if (document.getElementById('thinking-toggle-btn')) return;
-    var s = document.getElementById('send-message-button'); if (!s) return;
-    var btn = document.createElement('button');
-    btn.id = 'thinking-toggle-btn'; btn.type = 'button';
-    btn.className = 'thinking-toggle-btn' + (thinkingOn ? ' active' : '');
-    btn.textContent = 'Think'; btn.title = thinkingOn ? 'ON' : 'OFF';
-    btn.onclick = function(e) { e.preventDefault(); e.stopPropagation(); thinkingOn = !thinkingOn; btn.classList.toggle('active', thinkingOn); btn.title = thinkingOn ? 'ON' : 'OFF'; setThinking(thinkingOn); };
-    s.parentElement.insertBefore(btn, s);
-  }
-  setInterval(inject, 2000);
-})();
+// Moved to Svelte source: MessageInput.svelte (id="thinking-toggle-btn")
 
 
 // === Code / Chat toggle — two separate worlds ===

@@ -62,6 +62,7 @@
 	import RegenerateMenu from './ResponseMessage/RegenerateMenu.svelte';
 	import StatusHistory from './ResponseMessage/StatusHistory.svelte';
 	import FullHeightIframe from '$lib/components/common/FullHeightIframe.svelte';
+	import AtpStatePanel from './AtpState/AtpStatePanel.svelte';
 
 	interface MessageType {
 		id: string;
@@ -186,6 +187,7 @@
 	let loadingSpeech = false;
 
 	let showRateComment = false;
+	let showAtpState = false;
 
 	const copyToClipboard = async (text) => {
 		text = removeAllDetails(text);
@@ -1016,6 +1018,36 @@
 									</button>
 								</Tooltip>
 
+								{#if message.fileChanges?.length > 0}
+									<Tooltip content="ATP-STATE" placement="bottom">
+										<button
+											aria-label="ATP-STATE"
+											class="{isLastMessage || ($settings?.highContrastMode ?? false)
+												? 'visible'
+												: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition"
+											on:click={() => {
+												showAtpState = !showAtpState;
+											}}
+										>
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												fill="none"
+												viewBox="0 0 24 24"
+												stroke-width="2.3"
+												aria-hidden="true"
+												stroke="currentColor"
+												class="w-4 h-4"
+											>
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m5.231 13.481L15 17.25m-4.5-15H5.625c-.621 0-1.125.504-1.125 1.125v16.5c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9zm3.75 11.625a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z"
+												/>
+											</svg>
+										</button>
+									</Tooltip>
+								{/if}
+
 								{#if !readOnly && ($user?.role === 'admin' || ($user?.permissions?.chat?.tts ?? true))}
 									<Tooltip content={$i18n.t('Read Aloud')} placement="bottom">
 										<button
@@ -1453,6 +1485,10 @@
 								});
 							}}
 						/>
+					{/if}
+
+					{#if showAtpState && message.fileChanges?.length > 0}
+						<AtpStatePanel fileChanges={message.fileChanges} />
 					{/if}
 
 					{#if (isLastMessage || ($settings?.keepFollowUpPrompts ?? false)) && message.done && !readOnly && (message?.followUps ?? []).length > 0}

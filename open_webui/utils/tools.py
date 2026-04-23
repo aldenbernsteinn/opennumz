@@ -1037,6 +1037,9 @@ async def get_terminal_tools(
             'callable': callable,
             'spec': tool_spec,
             'type': 'terminal',
+            'server_url': server_data['url'],
+            'server_headers': headers,
+            'server_cookies': cookies,
         }
 
     return tools_dict, system_prompt

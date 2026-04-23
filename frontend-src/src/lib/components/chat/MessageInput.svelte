@@ -135,6 +135,30 @@
 
 	let showTerminalMenu = false;
 
+	// Thinking toggle — matches the numz model's /think system prompt mechanism
+	let thinkingOn = false;
+	const THINKING_BASE_PROMPT = 'You are a helpful assistant named numz. Never say you are Qwen or made by Alibaba.\n\nThe current date and time is {{CURRENT_DATETIME}}.';
+
+	const toggleThinking = async () => {
+		thinkingOn = !thinkingOn;
+		try {
+			const token = localStorage.token;
+			await fetch(`${WEBUI_API_BASE_URL}/models/model/update`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+				body: JSON.stringify({
+					id: 'numz',
+					name: 'numz',
+					base_model_id: 'numz',
+					params: { system: thinkingOn ? THINKING_BASE_PROMPT + '\n\n/think' : THINKING_BASE_PROMPT },
+					meta: { description: 'Qwen 3.6 35B-A3B' }
+				})
+			});
+		} catch (e) {
+			console.error('Failed to toggle thinking:', e);
+		}
+	};
+
 	export let messageQueue: { id: string; prompt: string; files: any[] }[] = [];
 	export let onQueueSendNow: (id: string) => void = () => {};
 	export let onQueueEdit: (id: string) => void = () => {};
@@ -1827,7 +1851,16 @@
 									</div>
 								</div>
 
-								<div class="self-end flex space-x-1 mr-1 shrink-0 gap-[0.5px]">
+								<div class="self-end flex space-x-1 mr-1 shrink-0 gap-[0.5px] items-center">
+									<button
+										id="thinking-toggle-btn"
+										type="button"
+										class="thinking-toggle-btn{thinkingOn ? ' active' : ''}"
+										title={thinkingOn ? 'ON' : 'OFF'}
+										on:click={toggleThinking}
+									>
+										Think
+									</button>
 									{#if (taskIds && taskIds.length > 0) || (history.currentId && history.messages[history.currentId]?.done != true) || generating}
 										<div class=" flex items-center">
 											<Tooltip content={$i18n.t('Stop')}>

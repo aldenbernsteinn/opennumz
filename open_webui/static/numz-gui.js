@@ -3,12 +3,49 @@
 (function() {
   'use strict';
 
-  var ws, messagesEl, spinnerEl, statusEl, inputEl, cmdMenuEl;
+  var ws, messagesEl, spinnerEl, statusEl, inputEl, cmdMenuEl, sendBtn;
   var currentAssistantEl, streamingText = '', streamingThinking = '';
   var _toolInputBuffers = {};
   var _spinnerTimer = null;
   var _spinnerStart = 0;
   var _activeTasks = {}; // task_id → {description, status, tool_name}
+  var _generating = false;
+  var _wsSessionId = '', _wsCwd = '', _wsTarget = null;
+  var _intentionalDisconnect = false;
+  var _reconnectTimer = null;
+
+  function _connectWebSocket() {
+    var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    var url = proto + '//' + location.host + '/api/numz/ws?session=' + (_wsSessionId || '') + '&cwd=' + encodeURIComponent(_wsCwd || '');
+    window._numzSessionId = _wsSessionId;
+    ws = new WebSocket(url);
+    ws.onopen = function() {
+      if (inputEl) inputEl.focus();
+      if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
+    };
+    ws.onmessage = function(e) { try { handleEvent(JSON.parse(e.data)); } catch(err) {} };
+    ws.onclose = function() {
+      if (_intentionalDisconnect) return;
+      // Auto-reconnect after 1 second
+      _reconnectTimer = setTimeout(function() {
+        if (!_intentionalDisconnect) _connectWebSocket();
+      }, 1000);
+    };
+    ws.onerror = function() {};
+  }
+
+  var ARROW_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>';
+  var STOP_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path fill-rule="evenodd" d="M2.25 12c0-5.385 4.365-9.75 9.75-9.75s9.75 4.365 9.75 9.75-4.365 9.75-9.75 9.75S2.25 17.385 2.25 12zm6-2.438c0-.724.588-1.312 1.313-1.312h4.874c.725 0 1.313.588 1.313 1.313v4.874c0 .725-.588 1.313-1.313 1.313H9.564a1.312 1.312 0 01-1.313-1.313V9.564z" clip-rule="evenodd"/></svg>';
+
+  function setGenerating(on) {
+    _generating = on;
+    if (sendBtn) {
+      sendBtn.innerHTML = on ? STOP_SVG : ARROW_SVG;
+    }
+    // Show/hide ESC hint
+    var hint = document.getElementById('numz-esc-hint');
+    if (hint) hint.style.display = on ? '' : 'none';
+  }
 
   // ── Public API ───────────────────────────────────────────────────────
 
@@ -54,10 +91,18 @@
       });
       inputBar.appendChild(thinkBtn);
 
-      var sendBtn = el('button', { className: 'numz-send-btn' });
-      sendBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>';
-      sendBtn.addEventListener('click', sendMessage);
+      sendBtn = el('button', { className: 'numz-send-btn' });
+      sendBtn.innerHTML = ARROW_SVG;
+      sendBtn.addEventListener('click', function() {
+        if (_generating) { sendInterrupt(); } else { sendMessage(); }
+      });
       inputBar.appendChild(sendBtn);
+
+      // ESC hint — shown while generating
+      var escHint = el('div', { id: 'numz-esc-hint' });
+      escHint.textContent = 'press esc to interrupt';
+      escHint.style.cssText = 'display:none;position:absolute;top:-20px;left:50%;transform:translateX(-50%);font-size:11px;color:#666;white-space:nowrap';
+      inputBar.appendChild(escHint);
 
       // Slash command menu
       cmdMenuEl = el('div', { className: 'numz-cmd-menu' });
@@ -66,20 +111,20 @@
       app.appendChild(inputBar);
       target.appendChild(app);
 
-      // Connect WebSocket immediately — one connection per session, stays alive
-      var url = 'ws://' + location.host + '/api/numz/ws?session=' + (sessionId || '') + '&cwd=' + encodeURIComponent(cwd || '');
-      window._numzSessionId = sessionId;
-      ws = new WebSocket(url);
-      ws.onopen = function() { inputEl.focus(); };
-      ws.onmessage = function(e) { try { handleEvent(JSON.parse(e.data)); } catch(err) {} };
-      ws.onclose = function() {};
-      ws.onerror = function() { addSystem('Connection failed', 'error'); };
+      // Connect WebSocket — auto-reconnects on disconnect
+      _wsSessionId = sessionId;
+      _wsCwd = cwd;
+      _wsTarget = target;
+      _intentionalDisconnect = false;
+      _connectWebSocket();
       inputEl.focus();
     },
 
     disconnect: function() {
+      _intentionalDisconnect = true;
       if (ws) { ws.close(); ws = null; }
       clearSpinner();
+      setGenerating(false);
     },
 
     // Load history from JSONL API (messages array with role/content)
@@ -105,12 +150,24 @@
 
   function handleInputKey(e) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-    if (e.key === 'Escape') { sendInterrupt(); }
-    if (e.key === '/' && inputEl.value === '') { showCmdMenu(); }
-    if (e.key === 'Escape' && cmdMenuEl.classList.contains('open')) {
-      cmdMenuEl.classList.remove('open'); e.preventDefault();
+    if (e.key === 'Escape') {
+      if (cmdMenuEl && cmdMenuEl.classList.contains('open')) {
+        cmdMenuEl.classList.remove('open');
+      } else if (_generating) {
+        sendInterrupt();
+      }
+      e.preventDefault();
     }
+    if (e.key === '/' && inputEl.value === '') { showCmdMenu(); }
   }
+
+  // Global ESC handler — works even when input is not focused
+  document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' && _generating) {
+      sendInterrupt();
+      e.preventDefault();
+    }
+  });
 
   function sendMessage() {
     if (!inputEl) return;
@@ -124,6 +181,7 @@
       return;
     }
     showSpinner('numz');
+    setGenerating(true);
     if (window._numzUpdateSessionStatus) window._numzUpdateSessionStatus('unread');
     ws.send(JSON.stringify({ type: 'user', message: { role: 'user', content: text } }));
   }
@@ -409,6 +467,18 @@
 
   function handleSystemEvent(ev) {
     var sub = ev.subtype || '';
+    if (sub === 'state_sync') {
+      // Server tells us current session state on connect/reconnect
+      var serverState = ev.state || 'idle';
+      if (serverState === 'generating') {
+        setGenerating(true);
+        showSpinner('numz');
+      } else {
+        setGenerating(false);
+        clearSpinner();
+      }
+      return;
+    }
     if (sub === 'init') {
       var model = ev.model || 'numz';
       var tools = ev.tools || [];
@@ -483,6 +553,7 @@
       addSystem('Error: ' + (ev.error || ev.subtype), 'error');
     }
 
+    setGenerating(false);
     if (inputEl) { inputEl.disabled = false; inputEl.focus(); }
     scrollBottom();
   }

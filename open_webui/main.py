@@ -71,6 +71,7 @@ from open_webui.socket.main import (
 from open_webui.routers import (
     analytics,
     audio,
+    changes,
     images,
     ollama,
     openai,
@@ -1522,6 +1523,7 @@ if ENABLE_ADMIN_ANALYTICS:
     app.include_router(analytics.router, prefix='/api/v1/analytics', tags=['analytics'])
 app.include_router(utils.router, prefix='/api/v1/utils', tags=['utils'])
 app.include_router(terminals.router, prefix='/api/v1/terminals', tags=['terminals'])
+app.include_router(changes.router, prefix='/api/v1/changes', tags=['changes'])
 
 # SCIM 2.0 API for identity management
 if ENABLE_SCIM:
@@ -3129,36 +3131,27 @@ async def import_numz_session(session_id: str):
 
 
 # ── numz Code Mode: WebSocket bidirectional NDJSON ──────────────────────
+#
+# Architecture: browser is just a viewer.  The numz subprocess is keyed by
+# session_id and survives browser disconnects.  On reconnect the browser
+# receives buffered events and resumes live-streaming.
 
 from starlette.websockets import WebSocket as _WS, WebSocketDisconnect as _WSDisconnect
+import collections as _collections
+import json as _json
 
-# Active numz processes keyed by WebSocket client id
-_numz_ws_procs: dict[str, _sp.Popen] = {}
+# Per-session server-side state (survives browser disconnects)
+_numz_session_procs: dict[str, _sp.Popen] = {}        # session_id → Popen
+_numz_session_buffers: dict[str, _collections.deque] = {}  # session_id → last N events
+_numz_session_state: dict[str, str] = {}               # session_id → 'generating'|'idle'
+_numz_session_ws: dict[str, _WS | None] = {}           # session_id → active WebSocket (or None)
+_numz_session_stdout_task: dict[str, _aio.Task] = {}   # session_id → background stdout reader
+_NUMZ_BUFFER_SIZE = 500
 
 
-@app.websocket('/api/numz/ws')
-async def numz_websocket(ws: _WS):
-    """Bidirectional NDJSON pipe to a numz process.
-    Browser sends user messages + control responses via WebSocket.
-    numz sends all events (text, tool calls, thinking, progress, etc.) back."""
-    await ws.accept()
-
-    import json as _json
-
-    # Get session info from query params
-    session_id = ws.query_params.get('session')
-    cwd = ws.query_params.get('cwd', '') or os.path.expanduser('~')
-    # Build numz command — no --permission-mode, numz uses its own default
-    cmd = ['/usr/local/bin/numz',
-           '--output-format', 'stream-json',
-           '--input-format', 'stream-json',
-           '--verbose']
-    # Resume existing session or start fresh
-    if session_id:
-        cmd += ['--resume', session_id]
-
-    # Clean env — only pass what numz needs, strip Open WebUI / Claude vars
-    numz_env = {
+def _numz_build_env():
+    """Clean env for numz subprocess."""
+    return {
         'PATH': os.environ.get('PATH', '/usr/local/bin:/usr/bin:/bin'),
         'HOME': os.environ.get('HOME', '/home/aldenb'),
         'TERM': 'dumb',
@@ -3167,76 +3160,195 @@ async def numz_websocket(ws: _WS):
         'SHELL': os.environ.get('SHELL', '/bin/bash'),
         'BUN_INSTALL': os.environ.get('BUN_INSTALL', os.path.expanduser('~/.bun')),
     }
-    # Log stderr to file for debugging
+
+
+async def _numz_stdout_reader(session_id: str, proc: _sp.Popen):
+    """Background task: read numz stdout, buffer events, forward to attached WebSocket.
+    Runs independently of any browser connection."""
+    loop = _aio.get_event_loop()
+    buf = _numz_session_buffers.setdefault(session_id, _collections.deque(maxlen=_NUMZ_BUFFER_SIZE))
+    try:
+        while proc.poll() is None:
+            line = await loop.run_in_executor(None, proc.stdout.readline)
+            if not line:
+                break
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                evt = _json.loads(line)
+            except Exception:
+                continue
+
+            # Track generating state
+            evt_type = evt.get('type', '')
+            if evt_type == 'result':
+                _numz_session_state[session_id] = 'idle'
+            elif evt_type == 'stream_event':
+                _numz_session_state[session_id] = 'generating'
+
+            # Buffer the event
+            buf.append(line)
+
+            # Forward to attached WebSocket (if any)
+            ws = _numz_session_ws.get(session_id)
+            if ws:
+                try:
+                    await ws.send_text(line)
+                except Exception:
+                    # Browser gone — detach but keep reading
+                    _numz_session_ws[session_id] = None
+    except Exception as e:
+        logging.error(f'[numz-ws] stdout reader error for {session_id}: {e}')
+    finally:
+        logging.info(f'[numz-ws] stdout reader done for {session_id}, proc.poll={proc.poll()}')
+        _numz_session_state[session_id] = 'idle'
+        # Process died — clean up
+        _numz_session_procs.pop(session_id, None)
+        _numz_session_stdout_task.pop(session_id, None)
+        # Don't clear buffer — browser may reconnect and need catch-up
+
+
+def _numz_spawn_process(session_id: str, cwd: str) -> _sp.Popen:
+    """Spawn a numz subprocess for a session."""
+    cmd = ['/usr/local/bin/numz',
+           '--output-format', 'stream-json',
+           '--input-format', 'stream-json',
+           '--verbose']
+    if session_id:
+        cmd += ['--resume', session_id]
+
     stderr_log = open('/tmp/numz-ws-stderr.log', 'a')
-    stderr_log.write(f'\n--- {time.strftime("%H:%M:%S")} spawning numz ---\n')
+    stderr_log.write(f'\n--- {time.strftime("%H:%M:%S")} spawning numz for {session_id} ---\n')
     stderr_log.flush()
 
     proc = _sp.Popen(
         cmd,
         stdin=_sp.PIPE, stdout=_sp.PIPE, stderr=stderr_log,
         cwd=cwd,
-        env=numz_env,
+        env=_numz_build_env(),
         text=True, bufsize=1
     )
+    return proc
 
-    ws_id = str(id(ws))
-    _numz_ws_procs[ws_id] = proc
 
-    async def read_stdout():
-        """Forward numz stdout → WebSocket."""
+@app.websocket('/api/numz/ws')
+async def numz_websocket(ws: _WS):
+    """Bidirectional NDJSON pipe to a numz process.
+    Browser connects/reconnects — process survives disconnects."""
+    await ws.accept()
+
+    session_id = ws.query_params.get('session', '')
+    cwd = ws.query_params.get('cwd', '') or os.path.expanduser('~')
+
+    if not session_id:
+        await ws.send_text(_json.dumps({'type': 'system', 'subtype': 'error', 'error': 'No session_id'}))
+        await ws.close()
+        return
+
+    # Check if process already running for this session
+    proc = _numz_session_procs.get(session_id)
+    if proc and proc.poll() is not None:
+        # Process died — clean up stale entry
+        _numz_session_procs.pop(session_id, None)
+        _numz_session_stdout_task.pop(session_id, None)
+        proc = None
+
+    spawned = False
+    if proc is None:
+        # Spawn new process
+        proc = _numz_spawn_process(session_id, cwd)
+        _numz_session_procs[session_id] = proc
+        _numz_session_buffers[session_id] = _collections.deque(maxlen=_NUMZ_BUFFER_SIZE)
+        _numz_session_state[session_id] = 'idle'
+        spawned = True
+        logging.info(f'[numz-ws] spawned new process for {session_id}, pid={proc.pid}')
+    else:
+        logging.info(f'[numz-ws] reattaching to existing process for {session_id}, pid={proc.pid}')
+
+    # Detach any previous WebSocket for this session
+    old_ws = _numz_session_ws.get(session_id)
+    if old_ws and old_ws is not ws:
         try:
-            loop = _aio.get_event_loop()
-            while proc.poll() is None:
-                line = await loop.run_in_executor(None, proc.stdout.readline)
-                if not line:
-                    logging.info('[numz-ws] stdout EOF')
-                    break
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    _json.loads(line)
-                    await ws.send_text(line)
-                except Exception as e:
-                    logging.error(f'[numz-ws] send error: {e}')
-            logging.info(f'[numz-ws] read_stdout done, proc.poll={proc.poll()}')
-        except Exception as e:
-            logging.error(f'[numz-ws] read_stdout exception: {e}')
-
-    async def read_ws():
-        """Forward WebSocket messages → numz stdin."""
-        try:
-            while True:
-                data = await ws.receive_text()
-                logging.info(f'[numz-ws] got from browser: {data[:80]}')
-                if proc.poll() is not None:
-                    logging.info('[numz-ws] proc dead, breaking')
-                    break
-                proc.stdin.write(data + '\n')
-                proc.stdin.flush()
-                logging.info('[numz-ws] wrote to stdin')
-        except _WSDisconnect:
-            logging.info('[numz-ws] browser disconnected')
-        except Exception as e:
-            logging.error(f'[numz-ws] read_ws exception: {e}')
-
-    logging.info('[numz-ws] starting tasks')
-    try:
-        await _aio.gather(read_stdout(), read_ws())
-    except Exception as e:
-        logging.error(f'[numz-ws] error: {e}')
-    finally:
-        _numz_ws_procs.pop(ws_id, None)
-        proc.terminate()
-        try:
-            proc.wait(timeout=3)
+            await old_ws.close()
         except Exception:
-            proc.kill()
+            pass
+    _numz_session_ws[session_id] = ws
+
+    # Send state sync event so browser knows if we're generating
+    state = _numz_session_state.get(session_id, 'idle')
+    await ws.send_text(_json.dumps({'type': 'system', 'subtype': 'state_sync', 'state': state}))
+
+    # If reattaching, send buffered events so browser catches up
+    if not spawned:
+        buf = _numz_session_buffers.get(session_id, [])
+        for line in buf:
+            try:
+                await ws.send_text(line)
+            except Exception:
+                break
+
+    # Start background stdout reader if not already running
+    existing_task = _numz_session_stdout_task.get(session_id)
+    if existing_task is None or existing_task.done():
+        task = _aio.create_task(_numz_stdout_reader(session_id, proc))
+        _numz_session_stdout_task[session_id] = task
+
+    # Read from WebSocket → numz stdin (this blocks until browser disconnects)
+    try:
+        while True:
+            data = await ws.receive_text()
+            logging.info(f'[numz-ws] got from browser: {data[:80]}')
+            if proc.poll() is not None:
+                logging.info('[numz-ws] proc dead, breaking')
+                break
+            # Track state from user messages
+            try:
+                msg = _json.loads(data)
+                if msg.get('type') == 'user':
+                    _numz_session_state[session_id] = 'generating'
+            except Exception:
+                pass
+            proc.stdin.write(data + '\n')
+            proc.stdin.flush()
+    except _WSDisconnect:
+        logging.info(f'[numz-ws] browser disconnected for {session_id} — process stays alive')
+    except Exception as e:
+        logging.error(f'[numz-ws] read_ws exception: {e}')
+    finally:
+        # Detach WebSocket but DON'T kill the process
+        if _numz_session_ws.get(session_id) is ws:
+            _numz_session_ws[session_id] = None
         try:
             await ws.close()
         except Exception:
             pass
+
+
+@app.post('/api/numz/sessions/{session_id}/interrupt')
+async def numz_interrupt(session_id: str):
+    """Send interrupt to a running numz session (works without WebSocket)."""
+    proc = _numz_session_procs.get(session_id)
+    if not proc or proc.poll() is not None:
+        return {'ok': False, 'error': 'No running process for session'}
+    try:
+        proc.stdin.write(_json.dumps({'type': 'interrupt'}) + '\n')
+        proc.stdin.flush()
+        return {'ok': True}
+    except Exception as e:
+        return {'ok': False, 'error': str(e)}
+
+
+@app.get('/api/numz/sessions/{session_id}/state')
+async def numz_session_state(session_id: str):
+    """Get current state of a numz session."""
+    proc = _numz_session_procs.get(session_id)
+    alive = proc is not None and proc.poll() is None
+    return {
+        'state': _numz_session_state.get(session_id, 'idle'),
+        'alive': alive,
+        'pid': proc.pid if alive else None,
+    }
 
 
 # Proxy Jarvis API (localhost:8895) for phone access via Tailscale

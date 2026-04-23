@@ -1,5 +1,5 @@
 <script context="module" lang="ts">
-	let savedTab: 'controls' | 'files' | 'overview' = 'controls';
+	let savedTab: 'controls' | 'files' | 'overview' | 'git' = 'controls';
 </script>
 
 <script lang="ts">
@@ -34,6 +34,8 @@
 	import FileNav from './FileNav.svelte';
 	import PyodideFileNav from './PyodideFileNav.svelte';
 	import Overview from './Overview.svelte';
+	import GitStatusPanel from './ChatControls/GitStatusPanel.svelte';
+	import { hasGit } from '$lib/apis/changes';
 
 	const i18n = getContext('i18n');
 
@@ -76,8 +78,19 @@
 		(codeInterpreterEnabled && $config?.code?.interpreter_engine !== 'jupyter');
 	$: showOverviewTab = hasMessages;
 
+	let projectHasGit = false;
+	$: if ($selectedTerminalId) {
+		hasGit(localStorage.token, $selectedTerminalId).then((r) => {
+			projectHasGit = r.has_git;
+		});
+	} else {
+		projectHasGit = false;
+	}
+	$: showGitTab = !!$selectedTerminalId && projectHasGit;
+
 	// Tab fallback: if active tab becomes hidden, switch to next available
 	$: if (!showOverviewTab && activeTab === 'overview') activeTab = 'controls';
+	$: if (!showGitTab && activeTab === 'git') activeTab = 'files';
 	$: if (!showFilesTab && activeTab === 'files') activeTab = 'controls';
 	$: if (!showControlsTab && activeTab === 'controls') {
 		if (showFilesTab) activeTab = 'files';
@@ -326,6 +339,17 @@
 										{$i18n.t('Overview')}
 									</button>
 								{/if}
+								{#if showGitTab}
+									<button
+										class="px-2.5 py-1 text-sm rounded-lg transition whitespace-nowrap {activeTab ===
+										'git'
+											? 'bg-gray-100 dark:bg-gray-800 font-medium text-gray-900 dark:text-white'
+											: 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}"
+										on:click={() => (activeTab = 'git')}
+									>
+										Git
+									</button>
+								{/if}
 							</div>
 							<button
 								class="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition text-gray-500 dark:text-gray-400"
@@ -352,7 +376,9 @@
 									? 'overflow-y-auto px-3 pt-1'
 									: ''}"
 						>
-							{#if activeTab === 'overview'}
+							{#if activeTab === 'git' && showGitTab}
+								<GitStatusPanel />
+							{:else if activeTab === 'overview'}
 								<Overview
 									{history}
 									onNodeClick={(e) => {
@@ -472,6 +498,17 @@
 											{$i18n.t('Overview')}
 										</button>
 									{/if}
+									{#if showGitTab}
+										<button
+											class="px-2.5 py-1 text-sm rounded-lg transition whitespace-nowrap {activeTab ===
+											'git'
+												? 'bg-gray-100 dark:bg-gray-800 font-medium text-gray-900 dark:text-white'
+												: 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'}"
+											on:click={() => (activeTab = 'git')}
+										>
+											Git
+										</button>
+									{/if}
 								</div>
 								<button
 									class="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition text-gray-500 dark:text-gray-400"
@@ -498,7 +535,9 @@
 										? 'overflow-y-auto px-3 pt-1'
 										: ''}"
 							>
-								{#if activeTab === 'overview'}
+								{#if activeTab === 'git' && showGitTab}
+									<GitStatusPanel />
+								{:else if activeTab === 'overview'}
 									<Overview
 										{history}
 										onNodeClick={(e) => {

@@ -401,13 +401,57 @@
 		saveChatHandler(_chatId, history);
 	};
 
-	const terminalEventHandler = (type: string, data: any) => {
+	// ATP-STATE: collect file snapshots per message during response
+	let pendingFileChanges: Map<string, { path: string; beforeContent: string | null; action: string }[]> = new Map();
+
+	const ATP_STATE_MAX_USER_MESSAGES = 15;
+
+	const atpStatePruneOldSnapshots = (hist: any) => {
+		// Walk the message tree to find user messages in order,
+		// then strip beforeContent from assistant messages older than 15 user messages back.
+		const messageList = createMessagesList(hist, hist.currentId);
+		const userMessageIds: string[] = [];
+		for (const msg of messageList) {
+			if (msg.role === 'user') userMessageIds.push(msg.id);
+		}
+		if (userMessageIds.length <= ATP_STATE_MAX_USER_MESSAGES) return;
+
+		const cutoffUserMsgId = userMessageIds[userMessageIds.length - ATP_STATE_MAX_USER_MESSAGES];
+		let pastCutoff = false;
+		for (const msg of messageList) {
+			if (msg.id === cutoffUserMsgId) pastCutoff = true;
+			if (pastCutoff) break;
+			// Strip beforeContent from old messages to save storage
+			if (msg.fileChanges) {
+				for (const fc of msg.fileChanges) {
+					fc.beforeContent = null;
+				}
+			}
+		}
+	};
+
+	const terminalEventHandler = (type: string, data: any, messageId?: string) => {
 		if (type === 'terminal:display_file') {
 			if (!data?.path) return;
 			displayFileHandler(data.path, { showControls, showFileNavPath });
 		} else if (type === 'terminal:write_file' || type === 'terminal:replace_file_content') {
 			if (!data?.path) return;
 			showFileNavDir.set(data.path);
+		} else if (type === 'terminal:file_snapshot') {
+			// ATP-STATE: stash file snapshot for this message
+			if (!data?.path || !messageId) return;
+			if (!pendingFileChanges.has(messageId)) {
+				pendingFileChanges.set(messageId, []);
+			}
+			const changes = pendingFileChanges.get(messageId)!;
+			// Avoid duplicates for same path
+			if (!changes.some((c) => c.path === data.path)) {
+				changes.push({
+					path: data.path,
+					beforeContent: data.beforeContent ?? null,
+					action: data.action ?? 'modified',
+				});
+			}
 		} else if (type === 'terminal:run_command') {
 			showFileNavDir.set('/');
 		}
@@ -551,7 +595,7 @@
 					eventConfirmationInputValue = data?.value ?? '';
 					eventConfirmationInputType = data?.type ?? '';
 				} else if (type.startsWith('terminal:')) {
-					terminalEventHandler(type, data);
+					terminalEventHandler(type, data, event.message_id);
 				} else {
 					console.log('Unknown message type', data);
 				}
@@ -1272,8 +1316,11 @@
 				await tick();
 
 				if (history.currentId) {
+					// Force all assistant messages to done on load — if we're loading
+					// from DB, any active generation is already over. This prevents
+					// skeleton/spinner animations from running forever after refresh.
 					for (const message of Object.values(history.messages)) {
-						if (message && message.role === 'assistant' && message.done !== false) {
+						if (message && message.role === 'assistant') {
 							message.done = true;
 						}
 					}
@@ -1692,6 +1739,15 @@
 
 		if (done) {
 			message.done = true;
+
+			// ATP-STATE: attach collected file changes to this message
+			if (pendingFileChanges.has(message.id)) {
+				message.fileChanges = pendingFileChanges.get(message.id);
+				pendingFileChanges.delete(message.id);
+
+				// Auto-prune: strip beforeContent from messages older than 15 user messages back
+				atpStatePruneOldSnapshots(history);
+			}
 
 			if ($settings.responseAutoCopy) {
 				copyToClipboard(message.content);

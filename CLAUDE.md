@@ -23,6 +23,10 @@ GUI for the numz TUI. numz is a **separate product** at `/home/aldenb/numz/`. We
 - `open_webui/static/` — Our custom static files (loader.js, numz-gui.js, CSS, images). NOT part of Svelte build.
 - `open_webui/frontend/` — Compiled Svelte build output. **NEVER edit directly.** Rebuild from `src/` instead.
 
+## Architecture Rule: Browser Is Just a Viewer
+
+Nothing is tied to the browser session. NOTHING. The browser is merely a way to view what's happening and send input. All state, all responses, all processing lives on this computer (server). If the user refreshes mid-response, the response keeps going on the server. When the browser reconnects, it catches up to current server state. Disconnecting the browser must never stop or lose work in progress.
+
 ## Rules
 
 - **NEVER** edit files in `open_webui/frontend/_app/`. That's compiled output. Edit `src/` and rebuild.

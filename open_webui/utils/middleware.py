@@ -1124,16 +1124,55 @@ def process_tool_result(
     return tool_result, tool_result_files, tool_result_embeds
 
 
+async def _read_file_from_terminal_server(
+    server_url: str,
+    headers: dict,
+    cookies: dict,
+    path: str,
+    max_size: int = 1_000_000,
+) -> tuple[str | None, str]:
+    """Read a file from the terminal server before a write for ATP-STATE snapshots.
+
+    Returns (content_or_None, action) where action is 'modified' or 'created'.
+    Returns None content for new files, binary files, or files > max_size.
+    """
+    import aiohttp as _aiohttp
+
+    read_url = f'{server_url.rstrip("/")}/files/read?path={path}'
+    try:
+        async with _aiohttp.ClientSession(
+            timeout=_aiohttp.ClientTimeout(total=5)
+        ) as session:
+            async with session.get(read_url, headers=headers, cookies=cookies) as resp:
+                if resp.status != 200:
+                    return None, 'created'
+                content_type = resp.headers.get('content-type', '')
+                if not content_type.startswith('application/json'):
+                    return None, 'modified'
+                data = await resp.json()
+                content = data.get('content')
+                if content is None:
+                    return None, 'created'
+                if len(content) > max_size:
+                    return None, 'modified'
+                return content, 'modified'
+    except Exception:
+        return None, 'created'
+
+
 async def terminal_event_handler(
     tool_function_name: str,
     tool_function_params: dict,
     tool_result,
     event_emitter,
+    before_content: str | None = None,
+    file_action: str | None = None,
 ):
     """Emit terminal:* events for Open Terminal tools.
 
     - display_file  → emits 'terminal:display_file' to open the file preview.
-    - write_file / replace_file_content → emits 'terminal:write_file' to refresh.
+    - write_file / replace_file_content → emits 'terminal:write_file' to refresh
+      AND 'terminal:file_snapshot' with before_content for ATP-STATE.
     - run_command → emits 'terminal:run_command' with cwd to refresh if relevant.
     """
     if not event_emitter:
@@ -1167,6 +1206,17 @@ async def terminal_event_handler(
             {
                 'type': f'terminal:{tool_function_name}',
                 'data': {'path': path},
+            }
+        )
+        # ATP-STATE: emit file snapshot for rollback/diff
+        await event_emitter(
+            {
+                'type': 'terminal:file_snapshot',
+                'data': {
+                    'path': path,
+                    'beforeContent': before_content,
+                    'action': file_action or 'modified',
+                },
             }
         )
     elif tool_function_name == 'run_command':
@@ -1217,6 +1267,7 @@ async def chat_completion_tools_handler(
             ],
             'stream': False,
             'metadata': {'task': str(TASKS.FUNCTION_CALLING)},
+            'chat_template_kwargs': {'enable_thinking': False},
         }
 
     event_caller = extra_params['__event_call__']
@@ -1275,6 +1326,20 @@ async def chat_completion_tools_handler(
                 tool_type = ''
                 direct_tool = False
 
+                # ATP-STATE: read file before write for snapshot
+                before_content = None
+                file_action = None
+                if tool_function_name in ('write_file', 'replace_file_content'):
+                    _tool = tools.get(tool_function_name, {})
+                    server_url = _tool.get('server_url')
+                    server_headers = _tool.get('server_headers', {})
+                    server_cookies = _tool.get('server_cookies', {})
+                    path = tool_function_params.get('path', '')
+                    if server_url and path:
+                        before_content, file_action = await _read_file_from_terminal_server(
+                            server_url, server_headers, server_cookies, path,
+                        )
+
                 try:
                     tool = tools[tool_function_name]
                     tool_type = tool.get('type', '')
@@ -1320,6 +1385,8 @@ async def chat_completion_tools_handler(
                         tool_function_params,
                         tool_result,
                         event_emitter,
+                        before_content=before_content,
+                        file_action=file_action,
                     )
 
                     if tool_result_files:
@@ -4662,23 +4729,16 @@ async def streaming_chat_response_handler(response, ctx):
                 log.warning('Task was cancelled!')
                 await event_emitter({'type': 'chat:tasks:cancel'})
 
-                if not ENABLE_REALTIME_CHAT_SAVE:
-                    # Save message in the database
-                    Chats.upsert_message_to_chat_by_id_and_message_id(
-                        metadata['chat_id'],
-                        metadata['message_id'],
-                        {
-                            'done': True,
-                            'content': serialize_output(output),
-                            'output': output,
-                        },
-                    )
-                else:
-                    Chats.upsert_message_to_chat_by_id_and_message_id(
-                        metadata['chat_id'],
-                        metadata['message_id'],
-                        {'done': True},
-                    )
+                # Always save accumulated content on cancellation
+                Chats.upsert_message_to_chat_by_id_and_message_id(
+                    metadata['chat_id'],
+                    metadata['message_id'],
+                    {
+                        'done': True,
+                        'content': serialize_output(output),
+                        'output': output,
+                    },
+                )
 
             if response.background is not None:
                 await response.background()
