@@ -724,6 +724,10 @@
 				</Tooltip>
 			</div>
 
+			<!-- Chat/Code toggle + Quiz/Jarvis — above New Chat -->
+			<div id="sidebar-custom-btns" class="sidebar-custom-btns"></div>
+			<div id="mode-slider" class="mode-slider"></div>
+
 			<div class="-mt-[0.5px]">
 				<div class="">
 					<Tooltip content={$i18n.t('New Chat')} placement="right">

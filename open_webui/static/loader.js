@@ -229,24 +229,95 @@
     });
   }
 
-  // ── New Chat in code mode — intercept the existing New Chat button ──
+  // ── New Chat in code mode — show workspace picker ──
   document.addEventListener('click', function(e) {
     if (!codeMode) return;
     var btn = e.target.closest('#sidebar-new-chat-button, a[href="/"]');
     if (!btn) return;
-    // Only intercept if it's the sidebar new chat button area
     var sidebar = document.getElementById('sidebar');
     if (!sidebar || !sidebar.contains(btn)) return;
     e.preventDefault();
     e.stopPropagation();
-    // Clear selection
-    document.querySelectorAll('.numz-session-item').forEach(function(el) { el.style.background = ''; });
-    sessionStorage.removeItem('numzActiveSession');
-    // Start fresh numz session (no session ID)
-    ensureNumzContainer();
-    if (window.numzGui) window.numzGui.disconnect();
-    window.numzGui.connect('', null, _numzContainer);
-  }, true); // capture phase to intercept before SvelteKit
+    showWorkspacePicker();
+  }, true);
+
+  function showWorkspacePicker() {
+    var existing = document.getElementById('numz-workspace-picker');
+    if (existing) { existing.remove(); return; }
+
+    var picker = document.createElement('div');
+    picker.id = 'numz-workspace-picker';
+    picker.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:400px;max-height:500px;background:#1a1a1a;border:1px solid rgba(255,255,255,0.1);border-radius:14px;z-index:9999;padding:20px;font-family:monospace;box-shadow:0 16px 48px rgba(0,0,0,0.6);overflow-y:auto';
+
+    // Computer selector at top
+    var h = '<div style="display:flex;gap:8px;margin-bottom:16px">' +
+      '<button class="numz-computer-btn active" data-computer="linux" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(236,72,153,0.3);background:rgba(236,72,153,0.1);color:#ec4899;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">Linux (Remote)</button>' +
+      '<button class="numz-computer-btn" data-computer="mac" style="flex:1;padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:none;color:#555;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit" disabled title="Coming soon">Mac (Local)</button>' +
+    '</div>';
+
+    // Search
+    h += '<input id="numz-workspace-search" type="text" placeholder="Search projects..." style="width:100%;padding:8px 12px;background:#111;border:1px solid rgba(255,255,255,0.08);border-radius:8px;color:#ccc;font-size:13px;font-family:monospace;outline:none;margin-bottom:12px">';
+
+    // Project list — loaded from API
+    h += '<div id="numz-workspace-list" style="color:#666;font-size:12px">Loading projects...</div>';
+
+    picker.innerHTML = h;
+
+    // Close on click outside
+    setTimeout(function() {
+      document.addEventListener('click', function closePicker(ev) {
+        if (!picker.contains(ev.target)) { picker.remove(); document.removeEventListener('click', closePicker); }
+      });
+    }, 100);
+
+    document.body.appendChild(picker);
+
+    // Load projects
+    fetch('/api/numz/folders').then(function(r) { return r.json(); }).then(function(folders) {
+      var listEl = document.getElementById('numz-workspace-list');
+      if (!listEl) return;
+      var fh = '';
+      folders.forEach(function(f) {
+        var name = f.name || f.path;
+        var path = f.path || '';
+        fh += '<div class="numz-workspace-item" data-path="' + esc(path) + '" style="padding:10px 12px;border-radius:8px;cursor:pointer;margin:2px 0;display:flex;align-items:center;gap:10px" onmouseover="this.style.background=\'rgba(255,255,255,0.04)\'" onmouseout="this.style.background=\'\'">' +
+          '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>' +
+          '<div><div style="color:#ccc;font-size:13px">' + esc(name) + '</div><div style="color:#555;font-size:11px">' + esc(path) + '</div></div></div>';
+      });
+      // Add home directory option
+      fh += '<div class="numz-workspace-item" data-path="/home/aldenb" style="padding:10px 12px;border-radius:8px;cursor:pointer;margin:2px 0;display:flex;align-items:center;gap:10px;border-top:1px solid rgba(255,255,255,0.06);margin-top:8px;padding-top:14px" onmouseover="this.style.background=\'rgba(255,255,255,0.04)\'" onmouseout="this.style.background=\'\'">' +
+        '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>' +
+        '<div style="color:#ccc;font-size:13px">Home (~)</div></div>';
+      listEl.innerHTML = fh;
+
+      // Click handler for workspace items
+      listEl.querySelectorAll('.numz-workspace-item').forEach(function(item) {
+        item.addEventListener('click', function() {
+          var path = item.dataset.path;
+          picker.remove();
+          // Clear selection and start fresh session in chosen workspace
+          document.querySelectorAll('.numz-session-item').forEach(function(el) { el.style.background = ''; });
+          sessionStorage.removeItem('numzActiveSession');
+          ensureNumzContainer();
+          if (window.numzGui) window.numzGui.disconnect();
+          window.numzGui.connect('', path, _numzContainer);
+        });
+      });
+
+      // Search filter
+      var searchEl = document.getElementById('numz-workspace-search');
+      if (searchEl) {
+        searchEl.addEventListener('input', function() {
+          var q = searchEl.value.toLowerCase();
+          listEl.querySelectorAll('.numz-workspace-item').forEach(function(item) {
+            var text = (item.textContent || '').toLowerCase();
+            item.style.display = text.indexOf(q) !== -1 ? '' : 'none';
+          });
+        });
+        searchEl.focus();
+      }
+    });
+  }
 
   // ── Session click → load into numz-gui ───────────────────────────
   document.addEventListener('click', function(e) {
