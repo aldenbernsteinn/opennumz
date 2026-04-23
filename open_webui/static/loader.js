@@ -284,62 +284,41 @@
 })();
 
 
-// === Settings icon (replaces "user" in chat bar) + model overlay ===
-(function() {
-  function replaceUserWithSettings() {
-    // Find the "user" button/text at bottom-left of chat area
-    var userBtns = document.querySelectorAll('button');
-    for (var i = 0; i < userBtns.length; i++) {
-      var b = userBtns[i];
-      if (b.textContent.trim() === 'user' && !b.dataset.numzSettings) {
-        b.dataset.numzSettings = 'true';
-        b.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
-        b.title = 'Settings';
-        b.addEventListener('click', function(e) {
-          e.preventDefault(); e.stopPropagation();
-          toggleSettingsOverlay();
-        });
-        break;
-      }
-    }
-  }
+// === Settings overlay (called from Svelte sidebar gear icon) ===
+window.toggleSettingsOverlay = function() {
+  var existing = document.getElementById('numz-settings-overlay');
+  if (existing) { existing.remove(); return; }
 
-  function toggleSettingsOverlay() {
-    var existing = document.getElementById('numz-settings-overlay');
-    if (existing) { existing.remove(); return; }
+  var overlay = document.createElement('div');
+  overlay.id = 'numz-settings-overlay';
+  overlay.style.cssText = 'position:fixed;bottom:60px;left:16px;width:340px;background:#1a1a1a;border:1px solid rgba(255,255,255,0.1);border-radius:12px;z-index:9999;padding:20px;font-family:monospace;box-shadow:0 8px 32px rgba(0,0,0,0.5)';
 
-    var overlay = document.createElement('div');
-    overlay.id = 'numz-settings-overlay';
-    overlay.style.cssText = 'position:fixed;bottom:60px;left:16px;width:340px;background:#1a1a1a;border:1px solid rgba(255,255,255,0.1);border-radius:12px;z-index:9999;padding:20px;font-family:monospace;box-shadow:0 8px 32px rgba(0,0,0,0.5)';
+  overlay.innerHTML =
+    '<div style="display:flex;gap:16px">' +
+      '<div style="flex:1">' +
+        '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Chat</div>' +
+        '<div style="font-size:12px;color:#06b6d4;margin-bottom:8px">qwen3.6-35b-a3b</div>' +
+        '<div style="color:#444;font-size:11px">via Open WebUI</div>' +
+      '</div>' +
+      '<div style="width:1px;background:rgba(255,255,255,0.06)"></div>' +
+      '<div style="flex:1">' +
+        '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Code</div>' +
+        '<div style="font-size:12px;color:#ec4899;margin-bottom:8px">qwen3.6-35b-a3b</div>' +
+        '<div style="color:#444;font-size:11px">via numz TUI</div>' +
+      '</div>' +
+    '</div>';
 
-    overlay.innerHTML =
-      '<div style="display:flex;gap:16px">' +
-        '<div style="flex:1">' +
-          '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Chat</div>' +
-          '<div style="font-size:12px;color:#06b6d4;margin-bottom:8px">qwen3.6-35b-a3b</div>' +
-          '<div style="color:#444;font-size:11px">via Open WebUI</div>' +
-        '</div>' +
-        '<div style="width:1px;background:rgba(255,255,255,0.06)"></div>' +
-        '<div style="flex:1">' +
-          '<div style="font-size:11px;color:#555;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Code</div>' +
-          '<div style="font-size:12px;color:#ec4899;margin-bottom:8px">qwen3.6-35b-a3b</div>' +
-          '<div style="color:#444;font-size:11px">via numz TUI</div>' +
-        '</div>' +
-      '</div>';
-
-    // Close on click outside
+  setTimeout(function() {
     document.addEventListener('click', function closeOverlay(e) {
       if (!overlay.contains(e.target)) {
         overlay.remove();
         document.removeEventListener('click', closeOverlay);
       }
     });
+  }, 100);
 
-    document.body.appendChild(overlay);
-  }
-
-  setInterval(replaceUserWithSettings, 2000);
-})();
+  document.body.appendChild(overlay);
+};
 
 
 // === Strip emojis ===

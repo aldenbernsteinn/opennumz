@@ -19,12 +19,11 @@
       // Messages scroll
       var scroll = el('div', { id: 'numz-messages-scroll' });
       messagesEl = el('div', { id: 'numz-messages' });
+      // Spinner lives inside messages (appears under last message, like TUI)
+      spinnerEl = el('div', { className: 'numz-spinner', style: 'display:none' });
+      messagesEl.appendChild(spinnerEl);
       scroll.appendChild(messagesEl);
       app.appendChild(scroll);
-
-      // Spinner area
-      spinnerEl = el('div', { className: 'numz-spinner', style: 'display:none' });
-      app.appendChild(spinnerEl);
 
       // Status line — shows model, workspace, tokens
       statusEl = el('div', { id: 'numz-status' });
