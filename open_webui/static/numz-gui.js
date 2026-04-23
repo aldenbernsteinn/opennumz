@@ -323,6 +323,7 @@
       '</div>';
     currentAssistantEl.appendChild(card);
     _toolInputBuffers[block.id] = '';
+    showSpinner(block.name, block.name);
     scrollBottom();
   }
 
@@ -346,6 +347,7 @@
   }
 
   function addToolResult(toolUseId, content, isError) {
+    clearSpinner();
     var card = messagesEl.querySelector('.numz-tool-card[data-tool-id="' + toolUseId + '"]');
     if (!card) card = messagesEl.querySelector('.numz-tool-card:last-child');
     if (!card) return;
