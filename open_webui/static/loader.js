@@ -287,38 +287,100 @@
 
   function showCodeSessionSearch() {
     var existing = document.getElementById('numz-session-search');
-    if (existing) { existing.remove(); return; }
+    if (existing) { existing.remove(); document.getElementById('numz-search-backdrop')?.remove(); return; }
 
-    var sidebar = document.getElementById('sidebar');
-    if (!sidebar) return;
+    // Backdrop
+    var backdrop = document.createElement('div');
+    backdrop.id = 'numz-search-backdrop';
+    backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99998';
+    backdrop.addEventListener('click', function() { backdrop.remove(); overlay.remove(); });
+    document.body.appendChild(backdrop);
 
-    var searchBox = document.createElement('div');
-    searchBox.id = 'numz-session-search';
-    searchBox.style.cssText = 'padding:4px 8px 8px';
-    searchBox.innerHTML = '<input type="text" placeholder="Search sessions..." style="width:100%;padding:7px 10px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:8px;color:#ccc;font-size:12px;outline:none">';
+    // Overlay
+    var overlay = document.createElement('div');
+    overlay.id = 'numz-session-search';
+    overlay.style.cssText = 'position:fixed;top:15%;left:50%;transform:translateX(-50%);width:480px;max-height:500px;background:rgb(32,33,35);border:1px solid rgba(255,255,255,0.08);border-radius:16px;z-index:99999;display:flex;flex-direction:column;box-shadow:0 24px 64px rgba(0,0,0,0.7);overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif';
 
-    var list = document.getElementById('numz-sessions-list');
-    if (list) {
-      list.parentElement.insertBefore(searchBox, list);
+    // Search input
+    var header = document.createElement('div');
+    header.style.cssText = 'padding:16px 20px 12px;border-bottom:1px solid rgba(255,255,255,0.06)';
+    header.innerHTML = '<input type="text" placeholder="Search sessions..." style="width:100%;padding:10px 14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#e5e5e5;font-size:14px;outline:none">';
+    overlay.appendChild(header);
+
+    // Results
+    var results = document.createElement('div');
+    results.style.cssText = 'flex:1;overflow-y:auto;padding:4px 8px 8px';
+    overlay.appendChild(results);
+
+    document.body.appendChild(overlay);
+
+    var input = header.querySelector('input');
+    input.focus();
+
+    var selectedIdx = 0;
+
+    function renderResults(q) {
+      var filtered = _allCodeSessions;
+      if (q) {
+        filtered = _allCodeSessions.filter(function(s) {
+          return ((s.title || '') + ' ' + (s.project || '') + ' ' + (s.folder || '')).toLowerCase().indexOf(q) !== -1;
+        });
+      }
+      var h = '';
+      filtered.forEach(function(s, i) {
+        var folderDisplay = (s.project || '~').replace(/^\/home\/\w+\//, '~/');
+        var date = new Date(s.updated_at * 1000);
+        var dateStr = date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+        h += '<div class="numz-search-item" data-sid="' + esc(s.id) + '" data-cwd="' + esc(s.project || '') + '" data-idx="' + i + '" style="padding:10px 14px;border-radius:10px;cursor:pointer;margin:2px 0' + (i === selectedIdx ? ';background:rgba(255,255,255,0.06)' : '') + '">' +
+          '<div style="font-size:13px;color:#e5e5e5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(s.title || 'Untitled') + '</div>' +
+          '<div style="font-size:11px;color:#666;margin-top:2px;font-family:monospace">' + esc(folderDisplay) + ' · ' + dateStr + '</div></div>';
+      });
+      if (!filtered.length) h = '<div style="padding:20px;text-align:center;color:#555;font-size:13px">No sessions found</div>';
+      results.innerHTML = h;
+
+      // Click handlers
+      results.querySelectorAll('.numz-search-item').forEach(function(item) {
+        item.addEventListener('click', function() { openFromSearch(item.dataset.sid, item.dataset.cwd); });
+        item.addEventListener('mouseover', function() {
+          selectedIdx = parseInt(item.dataset.idx);
+          results.querySelectorAll('.numz-search-item').forEach(function(r) { r.style.background = ''; });
+          item.style.background = 'rgba(255,255,255,0.06)';
+        });
+      });
     }
 
-    var input = searchBox.querySelector('input');
-    input.focus();
+    function openFromSearch(sid, cwd) {
+      backdrop.remove();
+      overlay.remove();
+      document.querySelectorAll('.numz-session-item').forEach(function(el) { el.style.background = ''; });
+      var item = document.querySelector('.numz-session-item[data-sid="' + sid + '"]');
+      if (item) item.style.background = 'rgba(255,255,255,0.06)';
+      sessionStorage.setItem('numzActiveSession', sid);
+      openSession(sid, cwd);
+    }
+
+    renderResults('');
+
     input.addEventListener('input', function() {
-      var q = input.value.toLowerCase();
-      if (!q) {
-        renderCodeSessions(_allCodeSessions);
-        return;
-      }
-      var filtered = _allCodeSessions.filter(function(s) {
-        var text = ((s.title || '') + ' ' + (s.project || '') + ' ' + (s.folder || '')).toLowerCase();
-        return text.indexOf(q) !== -1;
-      });
-      renderCodeSessions(filtered);
+      selectedIdx = 0;
+      renderResults(input.value.toLowerCase());
     });
+
     input.addEventListener('keydown', function(e) {
-      if (e.key === 'Escape') { searchBox.remove(); renderCodeSessions(_allCodeSessions); }
+      var items = results.querySelectorAll('.numz-search-item');
+      if (e.key === 'Escape') { backdrop.remove(); overlay.remove(); e.preventDefault(); }
+      else if (e.key === 'ArrowDown') { selectedIdx = Math.min(selectedIdx + 1, items.length - 1); updateHighlight(); e.preventDefault(); }
+      else if (e.key === 'ArrowUp') { selectedIdx = Math.max(selectedIdx - 1, 0); updateHighlight(); e.preventDefault(); }
+      else if (e.key === 'Enter' && items[selectedIdx]) { openFromSearch(items[selectedIdx].dataset.sid, items[selectedIdx].dataset.cwd); e.preventDefault(); }
     });
+
+    function updateHighlight() {
+      results.querySelectorAll('.numz-search-item').forEach(function(r, i) {
+        r.style.background = i === selectedIdx ? 'rgba(255,255,255,0.06)' : '';
+      });
+      var focused = results.querySelectorAll('.numz-search-item')[selectedIdx];
+      if (focused) focused.scrollIntoView({ block: 'nearest' });
+    }
   }
 
   // ── New Chat in code mode — show workspace picker ──
