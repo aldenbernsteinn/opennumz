@@ -26,9 +26,10 @@
       spinnerEl = el('div', { className: 'numz-spinner', style: 'display:none' });
       app.appendChild(spinnerEl);
 
-      // Status line
+      // Status line — shows model, workspace, tokens
       statusEl = el('div', { id: 'numz-status' });
-      statusEl.innerHTML = '<span class="numz-status-model">numz</span>';
+      var cwdDisplay = cwd ? cwd.replace(/^\/home\/\w+\//, '~/') : '~';
+      statusEl.innerHTML = '<span class="numz-status-model">numz</span><span class="numz-status-cwd" style="color:#888">' + esc(cwdDisplay) + '</span>';
       app.appendChild(statusEl);
 
       // Input bar
@@ -416,9 +417,13 @@
     if (sub === 'init') {
       var model = ev.model || 'numz';
       var tools = ev.tools || [];
+      var cwdInit = ev.cwd ? ev.cwd.replace(/^\/home\/\w+\//, '~/') : '';
+      var permMode = ev.permissionMode || 'default';
       statusEl.innerHTML =
-        '<span class="numz-status-model">' + esc(model) + '</span>' +
-        '<span class="numz-status-tokens">' + tools.length + ' tools</span>';
+        '<span class="numz-status-model" style="color:#06b6d4">' + esc(model) + '</span>' +
+        (cwdInit ? '<span class="numz-status-cwd" style="color:#888">' + esc(cwdInit) + '</span>' : '') +
+        '<span class="numz-status-perm" style="color:#22c55e">' + esc(permMode) + '</span>' +
+        '<span class="numz-status-tokens" style="color:#555">' + tools.length + ' tools</span>';
     }
     else if (sub === 'tool_progress') { showSpinner(ev.tool_name, ev.verb || ev.tool_name); }
     else if (sub === 'status') {
