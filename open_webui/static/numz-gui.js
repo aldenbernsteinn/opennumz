@@ -38,6 +38,18 @@
       inputEl.addEventListener('keydown', handleInputKey);
       inputBar.appendChild(inputEl);
 
+      // Think toggle
+      var thinkBtn = el('button', { id: 'numz-think-btn' });
+      thinkBtn.textContent = 'Think';
+      thinkBtn.style.cssText = 'padding:6px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.15);background:none;color:#666;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit;margin-right:4px';
+      thinkBtn.addEventListener('click', function() {
+        window._numzThinking = !window._numzThinking;
+        thinkBtn.style.color = window._numzThinking ? '#fff' : '#666';
+        thinkBtn.style.background = window._numzThinking ? 'rgba(255,255,255,0.12)' : 'none';
+        thinkBtn.style.borderColor = window._numzThinking ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.15)';
+      });
+      inputBar.appendChild(thinkBtn);
+
       var sendBtn = el('button', { className: 'numz-send-btn' });
       sendBtn.textContent = 'Send';
       sendBtn.addEventListener('click', sendMessage);
@@ -237,6 +249,7 @@
   }
 
   function updateThinking() {
+    if (!window._numzThinking) return; // Don't show thinking when Think is off
     ensureAssistant();
     var thinkEl = currentAssistantEl.querySelector('.numz-thinking');
     if (!thinkEl) {
@@ -265,7 +278,7 @@
       if (block.type === 'text' && block.text) {
         streamingText += block.text;
         updateText();
-      } else if (block.type === 'thinking' && block.thinking) {
+      } else if (block.type === 'thinking' && block.thinking && window._numzThinking) {
         streamingThinking += block.thinking;
         updateThinking();
       } else if (block.type === 'tool_use') {

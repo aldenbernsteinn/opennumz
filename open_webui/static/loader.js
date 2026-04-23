@@ -199,7 +199,7 @@
         var dot = '', status = s.folder || '~';
         if (s.active) { dot = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f59e0b;margin-right:8px;animation:pulse 1.5s ease-in-out infinite"></span>'; status = 'AI working'; }
         else if (s.live) { dot = '<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#22c55e;margin-right:8px"></span>'; status = 'Active'; }
-        h += '<div class="numz-session-item" data-sid="' + s.id + '" style="margin:1px 7px;cursor:pointer;padding:10px 12px;border-radius:10px' + (selected ? ';background:rgba(255,255,255,0.06)' : '') + '">' +
+        h += '<div class="numz-session-item" data-sid="' + s.id + '" data-cwd="' + esc(s.project || '') + '" style="margin:1px 7px;cursor:pointer;padding:10px 12px;border-radius:10px' + (selected ? ';background:rgba(255,255,255,0.06)' : '') + '">' +
           '<div style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:flex;align-items:center" class="text-gray-800 dark:text-gray-200">' + dot + esc(s.title || 'Untitled').substring(0, 50) + '</div>' +
           '<div style="font-size:11px;margin-top:2px" class="text-gray-500">' + status + ' &middot; ' + dateStr + '</div></div>';
       });
@@ -208,24 +208,44 @@
     });
   }
 
+  // ── New Chat in code mode — intercept the existing New Chat button ──
+  document.addEventListener('click', function(e) {
+    if (!codeMode) return;
+    var btn = e.target.closest('#sidebar-new-chat-button, a[href="/"]');
+    if (!btn) return;
+    // Only intercept if it's the sidebar new chat button area
+    var sidebar = document.getElementById('sidebar');
+    if (!sidebar || !sidebar.contains(btn)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    // Clear selection
+    document.querySelectorAll('.numz-session-item').forEach(function(el) { el.style.background = ''; });
+    sessionStorage.removeItem('numzActiveSession');
+    // Start fresh numz session (no session ID)
+    ensureNumzContainer();
+    if (window.numzGui) window.numzGui.disconnect();
+    window.numzGui.connect('', null, _numzContainer);
+  }, true); // capture phase to intercept before SvelteKit
+
   // ── Session click → load into numz-gui ───────────────────────────
   document.addEventListener('click', function(e) {
     var item = e.target.closest('.numz-session-item');
     if (!item) return;
     var sid = item.dataset.sid;
     if (!sid) return;
+    var cwd = item.dataset.cwd || '';
     // Highlight
     document.querySelectorAll('.numz-session-item').forEach(function(el) { el.style.background = ''; });
     item.style.background = 'rgba(255,255,255,0.06)';
     sessionStorage.setItem('numzActiveSession', sid);
-    openSession(sid);
+    openSession(sid, cwd);
   });
 
-  function openSession(sid) {
+  function openSession(sid, cwd) {
     ensureNumzContainer();
     if (window.numzGui) window.numzGui.disconnect();
     // Create the GUI first
-    window.numzGui.connect(sid, null, _numzContainer);
+    window.numzGui.connect(sid, cwd || null, _numzContainer);
     // Then load history from JSONL
     fetch('/api/numz/sessions/' + sid).then(function(r) { return r.json(); }).then(function(data) {
       if (data.messages && window.numzGui.loadHistory) window.numzGui.loadHistory(data.messages);

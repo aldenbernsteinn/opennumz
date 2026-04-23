@@ -3112,14 +3112,11 @@ async def numz_websocket(ws: _WS):
     # Get session info from query params
     session_id = ws.query_params.get('session')
     cwd = ws.query_params.get('cwd', '') or os.path.expanduser('~')
-    perm_mode = ws.query_params.get('perm', 'default')
-
-    # Build numz command
+    # Build numz command — no --permission-mode, numz uses its own default
     cmd = ['/usr/local/bin/numz',
            '--output-format', 'stream-json',
            '--input-format', 'stream-json',
-           '--verbose',
-           '--permission-mode', perm_mode]
+           '--verbose']
 
     # Clean env — only pass what numz needs, strip Open WebUI / Claude vars
     numz_env = {
