@@ -249,22 +249,49 @@
     scrollBottom();
   }
 
+  var _thinkingStartTime = 0;
+  var _thinkingTimer = null;
+
   function updateThinking() {
-    if (!window._numzThinking) return; // Don't show thinking when Think is off
+    if (!window._numzThinking) return;
     ensureAssistant();
     var thinkEl = currentAssistantEl.querySelector('.numz-thinking');
     if (!thinkEl) {
+      _thinkingStartTime = Date.now();
       thinkEl = el('div', { className: 'numz-thinking' });
       thinkEl.innerHTML =
         '<div class="numz-thinking-header" onclick="this.parentElement.classList.toggle(\'open\')">' +
-          '<span class="numz-thinking-icon">&#9654;</span>' +
-          '<span class="numz-thinking-shimmer">Thinking...</span>' +
+          '<span class="numz-thinking-spinner" style="display:inline-block;width:14px;height:14px;border:2px solid #333;border-top-color:#06b6d4;border-radius:50%;animation:numz-spin-wheel 0.6s linear infinite;margin-right:8px;vertical-align:middle"></span>' +
+          '<span class="numz-thinking-label">Thinking</span>' +
+          '<span class="numz-thinking-elapsed" style="color:#555;margin-left:8px"></span>' +
+          '<span style="margin-left:auto;color:#444;font-size:10px">&#9660;</span>' +
         '</div>' +
         '<div class="numz-thinking-content"></div>';
       currentAssistantEl.insertBefore(thinkEl, currentAssistantEl.firstChild);
+      // Update elapsed time
+      _thinkingTimer = setInterval(function() {
+        var elapsed = Math.round((Date.now() - _thinkingStartTime) / 1000);
+        var elEl = thinkEl.querySelector('.numz-thinking-elapsed');
+        if (elEl) elEl.textContent = elapsed + 's';
+      }, 1000);
     }
     thinkEl.querySelector('.numz-thinking-content').textContent = streamingThinking;
     scrollBottom();
+  }
+
+  function stopThinking() {
+    if (_thinkingTimer) { clearInterval(_thinkingTimer); _thinkingTimer = null; }
+    if (!currentAssistantEl) return;
+    var thinkEl = currentAssistantEl.querySelector('.numz-thinking');
+    if (!thinkEl) return;
+    // Stop spinner, show duration
+    var spinner = thinkEl.querySelector('.numz-thinking-spinner');
+    if (spinner) spinner.style.display = 'none';
+    var label = thinkEl.querySelector('.numz-thinking-label');
+    var elapsed = Math.round((Date.now() - _thinkingStartTime) / 1000);
+    if (label) label.textContent = 'Thought for ' + elapsed + 's';
+    var elapsedEl = thinkEl.querySelector('.numz-thinking-elapsed');
+    if (elapsedEl) elapsedEl.textContent = '';
   }
 
   // Handle complete assistant messages (non-streaming — numz sends these)
@@ -277,6 +304,7 @@
     for (var i = 0; i < content.length; i++) {
       var block = content[i];
       if (block.type === 'text' && block.text) {
+        stopThinking(); // Thinking is done when text arrives
         streamingText += block.text;
         updateText();
       } else if (block.type === 'thinking' && block.thinking && window._numzThinking) {
@@ -295,11 +323,7 @@
   }
 
   function finishAssistant() {
-    if (currentAssistantEl) {
-      // Stop thinking shimmer
-      var shimmer = currentAssistantEl.querySelector('.numz-thinking-shimmer');
-      if (shimmer) { shimmer.classList.remove('numz-thinking-shimmer'); shimmer.textContent = 'Thought'; }
-    }
+    stopThinking();
     currentAssistantEl = null;
     streamingText = '';
     streamingThinking = '';
@@ -324,7 +348,7 @@
       '</div>';
     currentAssistantEl.appendChild(card);
     _toolInputBuffers[block.id] = '';
-    showSpinner(block.name, block.name);
+    showSpinner(block.name);
     scrollBottom();
   }
 
@@ -425,11 +449,11 @@
         '<span class="numz-status-perm" style="color:#22c55e">' + esc(permMode) + '</span>' +
         '<span class="numz-status-tokens" style="color:#555">' + tools.length + ' tools</span>';
     }
-    else if (sub === 'tool_progress') { showSpinner(ev.tool_name, ev.verb || ev.tool_name); }
+    else if (sub === 'tool_progress') { showSpinner(ev.tool_name); }
     else if (sub === 'status') {
       if (ev.status === 'compacting') addSystem('Compacting context...', 'warning');
     }
-    else if (sub === 'hook_started') { showSpinner(ev.hook_name, 'Hook: ' + (ev.hook_name || '')); }
+    else if (sub === 'hook_started') { showSpinner(ev.hook_name); }
     else if (sub === 'hook_response') { clearSpinner(); }
     else if (sub === 'api_retry') { addSystem('API retry (attempt ' + (ev.attempt || '?') + ')...', 'warning'); }
     else if (sub === 'task_started') { addSystem('Task started: ' + (ev.description || '')); }
@@ -440,10 +464,7 @@
   }
 
   function handleResult(ev) {
-    clearSpinner();
-    currentAssistantEl = null;
-    streamingText = '';
-    streamingThinking = '';
+    finishAssistant();
 
     if (ev.subtype === 'success') {
       var usage = ev.usage || {};
@@ -519,14 +540,21 @@
 
   // ── Spinner ──────────────────────────────────────────────────────────
 
-  function showSpinner(toolName, verb) {
+  // Same verb list as TUI (from numz/src/constants/spinnerVerbs.ts)
+  var NUMZ_WORDS = ['kaisum','gunnersum','loversum','kissykinky','kinkynumz','kissybaby','kissylover','namakaisum','aciccia','numz','numanumz','akinaaaaaa','buggaboo','gucciboo','pradababy','seepybaby','kissylovernum','kissykaisum','namakinaaa','kinaaaaa','bubbakas','bubbas','tittytoos','tittytoosforbuggaboos','kina anamakina','ijustababy','shesjustababy','webabies','lubu','laboooboo','keesum','Mr.woodpecker','Megatron','Mushroom','Mashroooommm','Cuddlebaby','Ppnumz','Penits','Bigsquishy','Bacockkkk','peenar','californiaaa','daygo','tummywummies'];
+
+  // Glasses SVG for spinner icon (same as logo, inline)
+  var GLASSES_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 55" style="width:20px;height:11px;vertical-align:middle;margin-right:8px;animation:numz-glasses-pulse 1.2s ease-in-out infinite"><g fill="none" stroke="#ec4899" stroke-linecap="round" stroke-linejoin="round" transform="rotate(-2,50,27)"><path d="M10 12 L10 30 Q10 42 22 42 L32 42 Q44 42 44 30 L44 12 L10 12 Z" stroke-width="4.5"/><path d="M54 12 L54 30 Q54 42 66 42 L76 42 Q88 42 88 30 L88 12 L54 12 Z" stroke-width="4.5"/><path d="M44 18 Q49 11 54 18" stroke-width="3.5"/><line x1="10" y1="18" x2="0" y2="16" stroke-width="3.5"/><line x1="88" y1="18" x2="98" y2="16" stroke-width="3.5"/></g></svg>';
+
+  function showSpinner(toolName) {
     if (!spinnerEl) return;
     _spinnerStart = _spinnerStart || Date.now();
+    // Pick random numz word (same as TUI)
+    var verb = NUMZ_WORDS[Math.floor(Math.random() * NUMZ_WORDS.length)];
     spinnerEl.style.display = '';
-    spinnerEl.innerHTML =
-      '<span class="numz-spinner-dot"></span>' +
-      '<span class="numz-spinner-verb">' + esc(verb || toolName || 'Working') + '...</span>' +
-      '<span class="numz-spinner-elapsed"></span>';
+    spinnerEl.innerHTML = GLASSES_SVG +
+      '<span class="numz-spinner-verb" style="color:#ec4899">' + esc(verb) + '</span>' +
+      '<span class="numz-spinner-elapsed" style="color:#555;margin-left:8px"></span>';
 
     clearInterval(_spinnerTimer);
     _spinnerTimer = setInterval(function() {

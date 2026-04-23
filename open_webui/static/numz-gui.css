@@ -255,3 +255,5 @@
 
 /* === Animation === */
 @keyframes pulse { 0%,100% { opacity: 0.4; } 50% { opacity: 1; } }
+@keyframes numz-spin-wheel { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+@keyframes numz-glasses-pulse { 0%,100% { transform: scale(0.85); opacity: 0.5; } 50% { transform: scale(1.15); opacity: 1; } }
