@@ -34,7 +34,7 @@ GUI for the numz TUI. numz is a **separate product** at `/home/aldenb/numz/`. We
 ## Build Frontend
 
 ```bash
-cd src && npm run build
+cd frontend-src && npx vite build
 cp -a build/* ../open_webui/frontend/
 ```
 
