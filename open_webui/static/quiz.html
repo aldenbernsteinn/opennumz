@@ -157,13 +157,7 @@ fetch('/api/v1/auths/signin',{method:'POST',headers:{'Content-Type':'application
     }
   }).catch(function(){});
 
-// State: each question has a level: 'mcq' -> 'sa' -> 'done'
-// We go through ALL questions in order per round.
-// Round 1: all as MCQ. Correct = promote to 'sa'. Wrong = stays 'mcq'.
-// Round 2: promoted ones show as SA. Still-MCQ ones show as MCQ.
-// SA correct (PASS) = 'done'. SA wrong = show answer, stays 'sa'.
-// "I don't know" on SA = demote back to 'mcq'.
-// 'done' = never shown again.
+// State: MCQ only. Correct = done. Wrong = back of queue.
 
 var progress = loadProgress();
 var queue = progress.queue || buildQueue();
@@ -191,25 +185,22 @@ function getDoneCount(){
 
 function updateStats(){
   var done=getDoneCount();
-  var mcq=0,sa=0;
-  queue.forEach(function(id){var l=getLevel(id);if(l==='sa')sa++;else mcq++});
+  var remaining=queue.length;
   document.getElementById('prog').textContent=done+'/43';
   document.getElementById('pbar').style.width=(done/43*100)+'%';
   document.getElementById('s-done').textContent=done+' mastered';
-  document.getElementById('s-phase').textContent=mcq+' MCQ, '+sa+' short answer';
+  document.getElementById('s-phase').textContent=remaining+' remaining';
 }
 
 function render(){
   updateStats();
   if(queue.length===0){
-    document.getElementById('main').innerHTML='<div class="done-screen"><h2>All 43 mastered</h2><p>Every question completed in both MCQ and short answer.</p><div class="btn-row" style="justify-content:center;margin-top:20px"><button class="btn btn-primary" onclick="resetAll()">Reset</button></div></div>';
+    document.getElementById('main').innerHTML='<div class="done-screen"><h2>All 43 mastered</h2><p>Every question answered correctly.</p><div class="btn-row" style="justify-content:center;margin-top:20px"><button class="btn btn-primary" onclick="resetAll()">Reset</button></div></div>';
     return;
   }
   answeredCurrent=false;
   var q=getQ(queue[0]);
-  var level=getLevel(q.id);
-  if(level==='sa') renderSA(q);
-  else renderMCQ(q);
+  renderMCQ(q);
 }
 
 function tierClass(t){return'tier-'+(t==='red'?'red':t==='orange'?'orange':t==='yellow'?'yellow':'green')}
@@ -334,18 +325,13 @@ async function gradeSA(){
 function advance(){
   if(queue.length===0){render();return}
   var qid=queue[0];
-  var level=getLevel(qid);
 
-  if(level==='mcq'&&answeredCurrent&&document.querySelector('.opt.correct')){
-    // Correct MCQ — promote to SA, move to back
-    setLevel(qid,'sa');
-    queue.shift();
-    queue.push(qid);
-  } else if(level==='done'){
-    // SA passed — already set to done by gradeSA, remove from queue
+  if(answeredCurrent&&document.querySelector('.opt.correct')){
+    // Correct — mark done, remove from queue
+    setLevel(qid,'done');
     queue.shift();
   } else {
-    // Wrong answer or needs review — move to back
+    // Wrong — move to back
     queue.shift();
     queue.push(qid);
   }

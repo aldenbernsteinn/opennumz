@@ -2589,9 +2589,11 @@ applications.get_swagger_ui_html = swagger_ui_html
 @app.get('/quiz')
 @app.get('/quiz.html')
 async def serve_quiz():
-    quiz_path = os.path.join(FRONTEND_BUILD_DIR, 'quiz.html')
-    if os.path.isfile(quiz_path):
-        return FileResponse(quiz_path, media_type='text/html')
+    # Check both static and frontend dirs
+    for base in [STATIC_DIR, FRONTEND_BUILD_DIR]:
+        quiz_path = os.path.join(base, 'quiz.html')
+        if os.path.isfile(quiz_path):
+            return FileResponse(quiz_path, media_type='text/html')
     raise HTTPException(status_code=404)
 
 

@@ -28,7 +28,7 @@
     var wrap = document.createElement('div');
     wrap.id = 'sidebar-custom-btns';
     wrap.className = 'sidebar-custom-btns';
-    wrap.innerHTML = '<a href="/quiz" class="sidebar-link-btn">Quiz</a><a href="/jarvis" class="sidebar-link-btn">Jarvis</a>';
+    wrap.innerHTML = '<a href="/quiz" class="sidebar-link-btn" onclick="event.preventDefault();window.location.href=\'/quiz\'">Quiz</a><a href="/jarvis" class="sidebar-link-btn" onclick="event.preventDefault();window.location.href=\'/jarvis\'">Jarvis</a>';
     container.parentElement.insertBefore(wrap, container.nextSibling);
   }
   new MutationObserver(inject).observe(document.documentElement, { childList: true, subtree: true });
