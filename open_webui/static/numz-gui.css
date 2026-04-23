@@ -264,13 +264,13 @@
 @keyframes numz-spin-wheel { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 @keyframes numz-glasses-pulse { 0%,100% { transform: scale(0.85); opacity: 0.5; } 50% { transform: scale(1.15); opacity: 1; } }
 
-/* Shimmer sweep — each character glows bright then dims, staggered by delay */
+/* Shimmer sweep — base color is pink, shimmer is brighter white/pink on top */
 .numz-shimmer-char {
-  color: #666;
+  color: #ec4899;
   animation: numz-char-shimmer 2s ease-in-out infinite;
 }
 @keyframes numz-char-shimmer {
-  0%, 100% { color: #666; }
-  15% { color: #ec4899; }
-  30% { color: #666; }
+  0%, 100% { color: #ec4899; }
+  15% { color: #fff; }
+  30% { color: #ec4899; }
 }
