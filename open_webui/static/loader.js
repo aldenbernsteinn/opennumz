@@ -140,6 +140,7 @@
     _numzContainer.style.cssText = 'position:fixed;top:0;right:0;bottom:0;background:#0a0a0a;z-index:9999;display:flex;flex-direction:column';
     document.body.appendChild(_numzContainer);
     updateContainerPosition();
+    startPositionSync();
     _numzContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#444;font-family:monospace;font-size:14px">Select a session</div>';
   }
 
@@ -151,6 +152,15 @@
     if (window.innerWidth < 768) sidebarWidth = 0;
     _numzContainer.style.left = sidebarWidth + 'px';
   }
+
+  // Keep container position in sync with sidebar width changes
+  // (sidebar open/close, page load, resize)
+  var _positionInterval = null;
+  function startPositionSync() {
+    if (_positionInterval) return;
+    _positionInterval = setInterval(updateContainerPosition, 300);
+  }
+  window.addEventListener('resize', updateContainerPosition);
 
   // Update active session status in sidebar from WebSocket events
   window._numzUpdateSessionStatus = function(status) {
