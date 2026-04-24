@@ -16,6 +16,8 @@
   if (['/code','/jarvis','/quiz'].indexOf(window.location.pathname) !== -1) return;
   function inject() {
     if (document.getElementById('sidebar-custom-btns')) return;
+    // On mobile, these buttons go in the open sidebar (Svelte handles it)
+    if (window.innerWidth < 768) return;
     var btn = document.getElementById('sidebar-new-chat-button');
     if (!btn || btn.classList.contains('hidden')) {
       var all = document.querySelectorAll('#sidebar-new-chat-button');
@@ -56,6 +58,8 @@
   function injectSlider() {
     if (_sliderInjected) return;
     if (document.getElementById('mode-slider')) { _sliderInjected = true; return; }
+    // On mobile, the toggle goes in the open sidebar via injectMobileSlider — skip here
+    if (window.innerWidth < 768) return;
     // Insert before sidebar-custom-btns if it exists, otherwise after new chat button area
     var btns = document.getElementById('sidebar-custom-btns');
     if (!btns) {
