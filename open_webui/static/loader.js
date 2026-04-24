@@ -212,8 +212,40 @@
     // The slot content is any child that's NOT the sidebar and NOT the numz container
     Array.from(flexParent.children).forEach(function(child) {
       if (child.id === 'sidebar' || child.id === 'numz-container') return;
-      child.style.display = hide ? 'none' : '';
+      if (hide) {
+        // On mobile, don't fully hide — keep the top navbar visible for the sidebar button
+        // The navbar is the first child with the sidebar toggle
+        if (window.innerWidth < 768) {
+          // Make it a thin strip at the top showing just the navbar
+          child.style.position = 'absolute';
+          child.style.top = '0';
+          child.style.left = '0';
+          child.style.right = '0';
+          child.style.height = '44px';
+          child.style.overflow = 'hidden';
+          child.style.zIndex = '50';
+          child.style.pointerEvents = 'auto';
+        } else {
+          child.style.display = 'none';
+        }
+      } else {
+        child.style.display = '';
+        child.style.position = '';
+        child.style.top = '';
+        child.style.left = '';
+        child.style.right = '';
+        child.style.height = '';
+        child.style.overflow = '';
+        child.style.zIndex = '';
+        child.style.pointerEvents = '';
+      }
     });
+    // On mobile, offset numz container below the navbar strip
+    if (_numzContainer) {
+      _numzContainer.style.marginTop = (hide && window.innerWidth < 768) ? '44px' : '0';
+      _numzContainer.style.height = (hide && window.innerWidth < 768) ? 'calc(100dvh - 44px)' : '100dvh';
+      _numzContainer.style.maxHeight = _numzContainer.style.height;
+    }
   }
 
   function hideCodeView() {
