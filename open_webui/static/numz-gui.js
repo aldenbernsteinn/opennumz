@@ -18,20 +18,22 @@
     var proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
     var url = proto + '//' + location.host + '/api/numz/ws?session=' + (_wsSessionId || '') + '&cwd=' + encodeURIComponent(_wsCwd || '');
     window._numzSessionId = _wsSessionId;
+    console.log('[numz-gui] connecting WS:', url);
     ws = new WebSocket(url);
     ws.onopen = function() {
+      console.log('[numz-gui] WS connected');
       if (inputEl) inputEl.focus();
       if (_reconnectTimer) { clearTimeout(_reconnectTimer); _reconnectTimer = null; }
     };
-    ws.onmessage = function(e) { try { handleEvent(JSON.parse(e.data)); } catch(err) {} };
-    ws.onclose = function() {
+    ws.onmessage = function(e) { try { handleEvent(JSON.parse(e.data)); } catch(err) { console.error('[numz-gui] parse error:', err); } };
+    ws.onclose = function(e) {
+      console.log('[numz-gui] WS closed, code=' + e.code + ' intentional=' + _intentionalDisconnect);
       if (_intentionalDisconnect) return;
-      // Auto-reconnect after 1 second
       _reconnectTimer = setTimeout(function() {
         if (!_intentionalDisconnect) _connectWebSocket();
       }, 1000);
     };
-    ws.onerror = function() {};
+    ws.onerror = function(e) { console.error('[numz-gui] WS error:', e); };
   }
 
   var ARROW_SVG = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>';
