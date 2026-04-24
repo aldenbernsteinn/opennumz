@@ -3100,6 +3100,181 @@ async def numz_git_command(request: Request):
         return JSONResponse({'error': str(e)}, status_code=500)
 
 
+# ── Image Generation (ERNIE-Image-Turbo) ────────────────────────────────
+#
+# Pipeline: User prompt → Qwen rewrites → image server generates → image stored
+# Images stored per-chat in ~/.open-webui/images/{chat_id}/
+# Deleted when chat is deleted.
+
+import aiohttp as _aiohttp_img
+
+IMAGE_SERVER_URL = os.environ.get('IMAGE_SERVER_URL', 'http://127.0.0.1:8898')
+IMAGE_STORE_DIR = Path(os.path.expanduser('~/.open-webui/images'))
+
+# The detailed caption prompt for Qwen to rewrite user prompts
+_IMAGE_REWRITE_SYSTEM = '''You are an intelligent image description assistant. Generate a detailed, informative, and objective image description for high-quality image generation.
+
+Requirements:
+- Describe what should actually be visible in the image
+- Enter directly into describing content, no meta-descriptions like "This is an image of..."
+- Clearly structured, accurate language, sufficient information
+- Total length within 1000 tokens
+
+Include: image type, subject/scene, visual details/style, entity recognition, text transcription (verbatim in quotes), content instantiation (expand abstract slots into specific drawable content).
+
+Output strictly in JSON: {"rewritten_prompt": str}'''
+
+
+@app.post('/api/images/generate')
+async def generate_image(request: Request):
+    """Generate an image. Qwen rewrites the prompt, then ERNIE generates."""
+    body = await request.json()
+    prompt = body.get('prompt', '')
+    chat_id = body.get('chat_id', '')
+    width = body.get('width', 1024)
+    height = body.get('height', 1024)
+    # image_id: if editing an existing image, pass its ID
+    source_image_id = body.get('source_image_id')
+    # new_context: if True, start a new image context (don't reference previous)
+    new_context = body.get('new_context', False)
+
+    if not prompt:
+        return JSONResponse({'error': 'No prompt'}, status_code=400)
+
+    # Step 1: Qwen rewrites the prompt
+    rewrite_input = json.dumps({'prompt': prompt, 'width': width, 'height': height})
+    try:
+        async with _aiohttp_img.ClientSession(timeout=_aiohttp_img.ClientTimeout(total=120)) as session:
+            # Use the local llama-server for prompt rewriting
+            llm_url = os.environ.get('OPENAI_API_BASE_URL', 'http://100.103.233.31:8899/v1')
+            async with session.post(
+                f'{llm_url}/chat/completions',
+                json={
+                    'model': 'numz',
+                    'messages': [
+                        {'role': 'system', 'content': _IMAGE_REWRITE_SYSTEM},
+                        {'role': 'user', 'content': rewrite_input},
+                    ],
+                    'stream': False,
+                    'chat_template_kwargs': {'enable_thinking': False},
+                },
+            ) as resp:
+                data = await resp.json()
+                rewrite_text = data.get('choices', [{}])[0].get('message', {}).get('content', '')
+    except Exception as e:
+        logging.error(f'[image] Qwen rewrite failed: {e}')
+        rewrite_text = prompt  # fallback to original
+
+    # Parse the rewritten prompt
+    enhanced_prompt = prompt
+    try:
+        # Strip markdown code blocks if present
+        clean = rewrite_text.strip()
+        if clean.startswith('```'): clean = clean.split('\n', 1)[1].rsplit('```', 1)[0]
+        parsed = json.loads(clean)
+        enhanced_prompt = parsed.get('rewritten_prompt', prompt)
+    except Exception:
+        enhanced_prompt = rewrite_text if len(rewrite_text) > len(prompt) else prompt
+
+    logging.info(f'[image] Enhanced prompt: {enhanced_prompt[:200]}...')
+
+    # Step 2: Generate or edit image via image server
+    try:
+        async with _aiohttp_img.ClientSession(timeout=_aiohttp_img.ClientTimeout(total=300)) as session:
+            if source_image_id and not new_context:
+                # img2img edit — load the source image
+                source_path = IMAGE_STORE_DIR / chat_id / f'{source_image_id}.png'
+                if source_path.exists():
+                    import base64 as _b64
+                    source_b64 = _b64.b64encode(source_path.read_bytes()).decode('utf-8')
+                    async with session.post(
+                        f'{IMAGE_SERVER_URL}/edit',
+                        json={
+                            'prompt': enhanced_prompt,
+                            'image_base64': source_b64,
+                            'width': width,
+                            'height': height,
+                        },
+                    ) as resp:
+                        result = await resp.json()
+                else:
+                    # Source not found, generate new
+                    async with session.post(
+                        f'{IMAGE_SERVER_URL}/generate',
+                        json={'prompt': enhanced_prompt, 'width': width, 'height': height},
+                    ) as resp:
+                        result = await resp.json()
+            else:
+                # New image generation
+                async with session.post(
+                    f'{IMAGE_SERVER_URL}/generate',
+                    json={'prompt': enhanced_prompt, 'width': width, 'height': height},
+                ) as resp:
+                    result = await resp.json()
+    except Exception as e:
+        logging.error(f'[image] Generation failed: {e}')
+        return JSONResponse({'error': f'Image generation failed: {e}'}, status_code=502)
+
+    if 'error' in result:
+        return JSONResponse(result, status_code=502)
+
+    # Step 3: Store the image
+    import base64 as _b64
+    from uuid import uuid4 as _uuid4_img
+
+    image_id = str(_uuid4_img())[:8]
+    if chat_id:
+        img_dir = IMAGE_STORE_DIR / chat_id
+        img_dir.mkdir(parents=True, exist_ok=True)
+        img_path = img_dir / f'{image_id}.png'
+        img_path.write_bytes(_b64.b64decode(result['image']))
+        logging.info(f'[image] Saved {img_path}')
+
+    return {
+        'image_id': image_id,
+        'image': result['image'],  # base64
+        'seed': result.get('seed'),
+        'elapsed_ms': result.get('elapsed_ms'),
+        'enhanced_prompt': enhanced_prompt,
+        'chat_id': chat_id,
+    }
+
+
+@app.get('/api/images/get/{chat_id}/{image_id}')
+async def get_image(chat_id: str, image_id: str):
+    """Serve a stored image."""
+    img_path = IMAGE_STORE_DIR / chat_id / f'{image_id}.png'
+    if not img_path.exists():
+        raise HTTPException(status_code=404)
+    from fastapi.responses import FileResponse as _FR
+    return _FR(str(img_path), media_type='image/png')
+
+
+# Clean up images when a chat is deleted
+_original_delete_chat = None
+
+def _patch_chat_delete():
+    """Patch the chat delete handler to also remove stored images."""
+    from open_webui.models.chats import Chats as _Chats
+    original_fn = _Chats.delete_chat_by_id
+
+    def patched_delete(chat_id, *args, **kwargs):
+        # Delete stored images for this chat
+        img_dir = IMAGE_STORE_DIR / str(chat_id)
+        if img_dir.exists():
+            import shutil
+            shutil.rmtree(img_dir, ignore_errors=True)
+            logging.info(f'[image] Deleted images for chat {chat_id}')
+        return original_fn(chat_id, *args, **kwargs)
+
+    _Chats.delete_chat_by_id = staticmethod(patched_delete) if isinstance(original_fn, staticmethod) else patched_delete
+
+try:
+    _patch_chat_delete()
+except Exception as e:
+    logging.warning(f'[image] Could not patch chat delete: {e}')
+
+
 @app.post('/api/numz/mkdir')
 async def mkdir_directory(request: Request):
     """Create a directory. Limited to home tree."""

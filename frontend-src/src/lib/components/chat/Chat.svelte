@@ -155,6 +155,81 @@
 	let generating = false;
 	let dragged = false;
 	let generationController = null;
+	let imageGenOn = false;
+	let imageGenerating = false;
+
+	// Image generation handler — sends prompt to /api/images/generate
+	// The response image is added to the chat as a message
+	const handleImageGeneration = async (prompt: string) => {
+		if (!prompt.trim()) return;
+		imageGenerating = true;
+
+		// Add user message to chat
+		const userMessageId = uuidv4();
+		const responseMessageId = uuidv4();
+		history.messages[userMessageId] = {
+			id: userMessageId,
+			parentId: history.currentId,
+			childrenIds: [responseMessageId],
+			role: 'user',
+			content: prompt,
+			timestamp: Math.floor(Date.now() / 1000),
+		};
+		if (history.currentId && history.messages[history.currentId]) {
+			history.messages[history.currentId].childrenIds = [
+				...(history.messages[history.currentId].childrenIds ?? []),
+				userMessageId,
+			];
+		}
+		// Add placeholder assistant message
+		history.messages[responseMessageId] = {
+			id: responseMessageId,
+			parentId: userMessageId,
+			childrenIds: [],
+			role: 'assistant',
+			content: 'Generating image...',
+			done: false,
+			model: 'ernie-image-turbo',
+			timestamp: Math.floor(Date.now() / 1000),
+		};
+		history.currentId = responseMessageId;
+		history = history; // trigger reactivity
+		await tick();
+		if (autoScroll) scrollToBottom();
+
+		try {
+			const res = await fetch(`${$page.url.origin}/api/images/generate`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.token}` },
+				body: JSON.stringify({
+					prompt,
+					chat_id: $chatId || '',
+					width: 1024,
+					height: 1024,
+				}),
+			});
+			const data = await res.json();
+			if (data.error) {
+				history.messages[responseMessageId].content = `Image generation failed: ${data.error}`;
+			} else {
+				// Show the image in the message
+				const imgUrl = `${$page.url.origin}/api/images/get/${data.chat_id}/${data.image_id}`;
+				history.messages[responseMessageId].content = `![Generated Image](${imgUrl})`;
+				history.messages[responseMessageId].imageId = data.image_id;
+				history.messages[responseMessageId].imageSeed = data.seed;
+			}
+			history.messages[responseMessageId].done = true;
+		} catch (e) {
+			history.messages[responseMessageId].content = `Image generation failed: ${e}`;
+			history.messages[responseMessageId].done = true;
+		}
+
+		imageGenerating = false;
+		history = history;
+		await tick();
+		if (autoScroll) scrollToBottom();
+		saveChatHandler($chatId, history);
+	};
 
 	let chat = null;
 	let tags = [];
@@ -2969,12 +3044,16 @@
 											saveDraft(data, $chatId);
 										}
 									}}
+									bind:imageGenOn
 									on:submit={async (e) => {
 										clearDraft();
 										if (e.detail || files.length > 0) {
 											await tick();
-
-											submitPrompt(e.detail.replaceAll('\n\n', '\n'));
+											if (imageGenOn) {
+												await handleImageGeneration(e.detail);
+											} else {
+												submitPrompt(e.detail.replaceAll('\n\n', '\n'));
+											}
 										}
 									}}
 								/>

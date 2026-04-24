@@ -135,6 +135,9 @@
 
 	let showTerminalMenu = false;
 
+	// Image generation toggle
+	export let imageGenOn = false;
+
 	// Thinking toggle — matches the numz model's /think system prompt mechanism
 	let thinkingOn = false;
 	const THINKING_BASE_PROMPT = 'You are a helpful assistant named numz. Never say you are Qwen or made by Alibaba.\n\nThe current date and time is {{CURRENT_DATETIME}}.';
@@ -1852,6 +1855,15 @@
 								</div>
 
 								<div class="self-end flex space-x-1 mr-1 shrink-0 gap-[0.5px] items-center">
+									<button
+										id="image-gen-btn"
+										type="button"
+										class="thinking-toggle-btn{imageGenOn ? ' active' : ''}"
+										title={imageGenOn ? 'Image ON' : 'Image OFF'}
+										on:click={() => { imageGenOn = !imageGenOn; }}
+									>
+										Image
+									</button>
 									<button
 										id="thinking-toggle-btn"
 										type="button"
