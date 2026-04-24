@@ -89,6 +89,33 @@
     if (!_codeModeRestored && codeMode && codePinVerified) { _codeModeRestored = true; switchMode('code'); }
   }
 
+  // Inject toggle into the mobile open sidebar too
+  function injectMobileSlider() {
+    var container = document.querySelector('.mode-slider-mobile');
+    if (!container || container.children.length > 0) return;
+    var slider = document.createElement('div');
+    slider.className = 'mode-slider';
+    slider.innerHTML = '<div class="mode-slider-track"><button class="mode-slider-btn' + (codeMode ? '' : ' active') + '" data-mode="chat">Chat</button><button class="mode-slider-btn' + (codeMode ? ' active' : '') + '" data-mode="code">Code</button></div>';
+    slider.querySelectorAll('.mode-slider-btn').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        var mode = btn.dataset.mode;
+        if (mode === 'code' && !codePinVerified) {
+          if (_pinInProgress) return;
+          _pinInProgress = true;
+          var pin = prompt('Enter Code PIN:');
+          _pinInProgress = false;
+          if (!pin) return;
+          fetch('/api/code/verify-pin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pin: pin }) }).then(function(r) { if (r.ok) { codePinVerified = true; sessionStorage.setItem('numzCodePin', 'true'); switchMode('code'); } else { alert('Wrong PIN'); } });
+          return;
+        }
+        switchMode(mode);
+      });
+    });
+    container.appendChild(slider);
+  }
+  // Keep checking since the sidebar opens/closes dynamically
+  setInterval(injectMobileSlider, 500);
+
   // ── Mode switching ───────────────────────────────────────────────
   function switchMode(mode) {
     codeMode = (mode === 'code');

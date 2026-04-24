@@ -928,6 +928,12 @@
 				></div>
 			</div>
 
+			<!-- Chat/Code toggle (mobile) — same as collapsed sidebar strip on desktop -->
+			{#if $mobile}
+				<div class="sidebar-custom-btns-mobile px-2 pb-1"></div>
+				<div class="mode-slider-mobile px-2 pb-2"></div>
+			{/if}
+
 			<div
 				class="relative flex flex-col flex-1 overflow-y-auto scrollbar-hidden pt-3 pb-3"
 				on:scroll={(e) => {
