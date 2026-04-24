@@ -155,6 +155,13 @@
     var sidebarWidth = sidebar ? sidebar.offsetWidth : 0;
     if (window.innerWidth < 768) sidebarWidth = 0;
     _numzContainer.style.left = sidebarWidth + 'px';
+    // Mobile: z-index below Navbar (z-30) and sidebar (z-50)
+    // so both can render on top of the code view
+    if (window.innerWidth < 768) {
+      _numzContainer.style.zIndex = '20';
+    } else {
+      _numzContainer.style.zIndex = '9999';
+    }
   }
 
   // Keep container position in sync with sidebar width changes
