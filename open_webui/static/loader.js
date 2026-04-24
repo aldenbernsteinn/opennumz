@@ -414,17 +414,57 @@
     var header = document.createElement('div');
     header.id = 'numz-wp-header';
     header.style.cssText = 'padding:16px 20px 12px;border-bottom:1px solid rgba(255,255,255,0.06)';
+    // Dynamic computer selector — fetches terminal servers
     header.innerHTML =
-      // Computer selector
-      '<div style="display:flex;gap:8px;margin-bottom:12px">' +
-        '<button class="numz-computer-btn active" data-computer="linux" style="flex:1;padding:7px;border-radius:8px;border:1px solid rgba(236,72,153,0.3);background:rgba(236,72,153,0.1);color:#ec4899;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">Linux (Remote)</button>' +
-        '<button class="numz-computer-btn" data-computer="mac" style="flex:1;padding:7px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:none;color:#555;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit" disabled title="Coming soon">Mac (Coming Soon)</button>' +
-      '</div>' +
-      // Search
+      '<div id="numz-wp-computers" style="display:flex;gap:8px;margin-bottom:12px"><span style="color:#555;font-size:12px;padding:7px">Loading machines...</span></div>' +
       '<input id="numz-wp-search" type="text" placeholder="Search all folders..." style="width:100%;padding:7px 12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:8px;color:#ccc;font-size:13px;outline:none;margin-bottom:10px">' +
-      // Breadcrumb
       '<div id="numz-wp-breadcrumb" style="display:flex;align-items:center;gap:4px;font-size:12px;color:#888;flex-wrap:wrap"></div>';
     picker.appendChild(header);
+
+    var _wpSelectedServer = null; // { id, name, url, key }
+    var _wpServers = [];
+
+    // Fetch terminal servers and build computer buttons
+    var token = localStorage.token || '';
+    fetch('/api/v1/terminals/', { headers: { Authorization: 'Bearer ' + token } })
+      .then(function(r) { return r.json(); })
+      .then(function(servers) {
+        _wpServers = servers;
+        var container = document.getElementById('numz-wp-computers');
+        if (!container) return;
+        if (servers.length === 0) {
+          container.innerHTML = '<span style="color:#888;font-size:12px;padding:7px">No machines connected. Set up spawn-hook.</span>';
+          return;
+        }
+        var h = '';
+        servers.forEach(function(s, i) {
+          var isFirst = i === 0;
+          h += '<button class="numz-computer-btn' + (isFirst ? ' active' : '') + '" data-server-id="' + esc(s.id) + '" style="flex:1;padding:7px;border-radius:8px;border:1px solid ' + (isFirst ? 'rgba(236,72,153,0.3)' : 'rgba(255,255,255,0.06)') + ';background:' + (isFirst ? 'rgba(236,72,153,0.1)' : 'none') + ';color:' + (isFirst ? '#ec4899' : '#888') + ';font-size:12px;font-weight:600;cursor:pointer;font-family:inherit">' + esc(s.name) + '</button>';
+        });
+        container.innerHTML = h;
+        // Select first by default
+        if (servers[0]) selectServer(servers[0]);
+        // Click handlers
+        container.querySelectorAll('.numz-computer-btn').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            var sid = btn.dataset.serverId;
+            var srv = servers.find(function(s) { return s.id === sid; });
+            if (srv) selectServer(srv);
+            container.querySelectorAll('.numz-computer-btn').forEach(function(b) {
+              var active = b.dataset.serverId === sid;
+              b.style.borderColor = active ? 'rgba(236,72,153,0.3)' : 'rgba(255,255,255,0.06)';
+              b.style.background = active ? 'rgba(236,72,153,0.1)' : 'none';
+              b.style.color = active ? '#ec4899' : '#888';
+              b.classList.toggle('active', active);
+            });
+          });
+        });
+      });
+
+    function selectServer(srv) {
+      _wpSelectedServer = srv;
+      navigateTo('~');
+    }
 
     // Search logic — filters current file list
     setTimeout(function() {
@@ -488,7 +528,35 @@
     function navigateTo(dirPath) {
       currentPath = dirPath;
       fileList.innerHTML = '<div style="padding:20px;text-align:center;color:#555;font-size:12px">Loading...</div>';
-      fetch('/api/numz/browse?path=' + encodeURIComponent(dirPath)).then(function(r) { return r.json(); }).then(function(data) {
+      // Browse via the selected terminal server (spawn-hook), or local fallback
+      var browseUrl;
+      if (_wpSelectedServer) {
+        browseUrl = '/api/v1/terminals/' + _wpSelectedServer.id + '/files/list?directory=' + encodeURIComponent(dirPath === '~' ? '' : dirPath);
+      } else {
+        browseUrl = '/api/numz/browse?path=' + encodeURIComponent(dirPath);
+      }
+      var headers = { Authorization: 'Bearer ' + (localStorage.token || '') };
+      fetch(browseUrl, { headers: headers }).then(function(r) { return r.json(); }).then(function(rawData) {
+        // Normalize: terminal server returns {entries:[...]}, local returns {path,display,parent,entries}
+        var data;
+        if (rawData.display) {
+          data = rawData; // local browse format
+        } else {
+          // Terminal server format — build compatible structure
+          var resolvedPath = dirPath === '~' ? '~' : dirPath;
+          var parentPath = resolvedPath.split('/').slice(0, -1).join('/') || '~';
+          data = {
+            path: resolvedPath,
+            display: resolvedPath.replace(/^\/home\/\w+/, '~'),
+            parent: resolvedPath !== '~' ? parentPath : null,
+            entries: (rawData.entries || []).filter(function(e) { return e.type === 'directory'; }).map(function(e) {
+              var fullPath = (resolvedPath === '~' ? '~/' : resolvedPath + '/') + e.name;
+              return { name: e.name, path: fullPath, type: 'directory', git: false };
+            }),
+          };
+        }
+        return data;
+      }).then(function(data) {
         if (data.error) { fileList.innerHTML = '<div style="padding:20px;text-align:center;color:#ef4444;font-size:12px">' + esc(data.error) + '</div>'; return; }
         currentPath = data.path;
 
