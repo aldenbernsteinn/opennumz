@@ -101,10 +101,21 @@
     });
     updateNewChatButton();
     if (codeMode) {
-      showCodeSessions(true);
-      if (_numzContainer) _numzContainer.style.display = '';
-      // Hide the Svelte chat content — numz container replaces it
-      hideSvelteContent(true);
+      // On mobile, close the sidebar first so the Navbar's sidebar button becomes visible
+      if (window.innerWidth < 768) {
+        var closeBtn = document.querySelector('button[aria-label="Close Sidebar"]');
+        if (closeBtn) closeBtn.click();
+        // Wait for sidebar close animation before showing code view
+        setTimeout(function() {
+          showCodeSessions(true);
+          if (_numzContainer) _numzContainer.style.display = '';
+          hideSvelteContent(true);
+        }, 300);
+      } else {
+        showCodeSessions(true);
+        if (_numzContainer) _numzContainer.style.display = '';
+        hideSvelteContent(true);
+      }
     } else {
       hideCodeView();
       hideSvelteContent(false);
