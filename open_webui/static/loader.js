@@ -153,31 +153,14 @@
     if (!_numzContainer) return;
     var sidebar = document.getElementById('sidebar');
     var sidebarWidth = sidebar ? sidebar.offsetWidth : 0;
-    var isMobile = window.innerWidth < 768;
-    if (isMobile) sidebarWidth = 0;
+    if (window.innerWidth < 768) sidebarWidth = 0;
     _numzContainer.style.left = sidebarWidth + 'px';
     _numzContainer.style.top = '0';
-    // On mobile, use z-index below the sidebar (z-50) so sidebar opens on top
-    _numzContainer.style.zIndex = isMobile ? '40' : '9999';
-    // On mobile, show a sidebar toggle button inside the numz container
-    // Same position and icon as the chat mode's Navbar sidebar button
-    var existing = document.getElementById('numz-sidebar-btn');
-    if (isMobile && sidebarWidth === 0 && !existing) {
-      var btn = document.createElement('button');
-      btn.id = 'numz-sidebar-btn';
-      // Same position as chat Navbar's sidebar button: top-left, small padding
-      btn.style.cssText = 'position:absolute;top:6px;left:6px;z-index:10;cursor:pointer;padding:6px;border-radius:8px;background:none;border:none;color:#999;-webkit-tap-highlight-color:transparent';
-      btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" width="22" height="22"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25H12"/></svg>';
-      btn.addEventListener('click', function(e) {
-        e.stopPropagation();
-        // Click the Svelte sidebar's own toggle button
-        var svelteBtn = document.querySelector('button[aria-label="Open Sidebar"], button[aria-label="Close Sidebar"]');
-        if (svelteBtn) svelteBtn.click();
-      });
-      _numzContainer.appendChild(btn);
-    } else if (!isMobile && existing) {
-      existing.remove();
-    }
+    // On mobile, z-index below the sidebar (z-50) so sidebar opens on top when toggled
+    _numzContainer.style.zIndex = (window.innerWidth < 768) ? '40' : '9999';
+    // Remove any leftover hamburger button
+    var stale = document.getElementById('numz-sidebar-btn');
+    if (stale) stale.remove();
   }
 
   // Keep container position in sync with sidebar width changes
