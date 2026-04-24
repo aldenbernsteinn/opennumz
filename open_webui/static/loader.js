@@ -153,9 +153,67 @@
     if (!_numzContainer) return;
     var sidebar = document.getElementById('sidebar');
     var sidebarWidth = sidebar ? sidebar.offsetWidth : 0;
-    // On mobile (narrow), sidebar is hidden — go full width
-    if (window.innerWidth < 768) sidebarWidth = 0;
+    var isMobile = window.innerWidth < 768;
+    // On mobile, sidebar is hidden — go full width but leave room for top bar
+    if (isMobile) sidebarWidth = 0;
     _numzContainer.style.left = sidebarWidth + 'px';
+    // Add/update mobile top bar
+    updateMobileTopBar(isMobile);
+  }
+
+  function updateMobileTopBar(isMobile) {
+    if (!_numzContainer) return;
+    var existing = document.getElementById('numz-mobile-topbar');
+    if (!isMobile) {
+      if (existing) existing.remove();
+      return;
+    }
+    if (existing) return; // already there
+    var bar = document.createElement('div');
+    bar.id = 'numz-mobile-topbar';
+    bar.style.cssText = 'display:flex;align-items:center;padding:8px 12px;gap:8px;border-bottom:1px solid rgba(255,255,255,0.06);flex-shrink:0';
+    // Hamburger menu button — toggles sidebar
+    var menuBtn = document.createElement('button');
+    menuBtn.style.cssText = 'background:none;border:none;color:#aaa;cursor:pointer;padding:4px;display:flex';
+    menuBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>';
+    menuBtn.addEventListener('click', function() {
+      // Toggle the Svelte sidebar
+      var sidebarEl = document.getElementById('sidebar');
+      if (sidebarEl) {
+        var isOpen = sidebarEl.style.display !== 'none' && sidebarEl.offsetWidth > 0;
+        if (isOpen) {
+          // Try clicking the Svelte sidebar toggle
+          var toggle = document.querySelector('[aria-label="Close Sidebar"], [aria-label="Open Sidebar"]');
+          if (toggle) toggle.click();
+        } else {
+          var toggle = document.querySelector('[aria-label="Open Sidebar"], [aria-label="Close Sidebar"]');
+          if (toggle) toggle.click();
+        }
+      }
+    });
+    bar.appendChild(menuBtn);
+    // Chat/Code toggle inline
+    var toggle = document.createElement('div');
+    toggle.style.cssText = 'display:flex;gap:4px;flex:1';
+    toggle.innerHTML = '<button class="numz-mb-toggle" data-mode="chat" style="flex:1;padding:5px;border-radius:6px;border:1px solid rgba(255,255,255,0.06);background:none;color:#666;font-size:11px;font-weight:600;cursor:pointer">Chat</button>' +
+      '<button class="numz-mb-toggle active" data-mode="code" style="flex:1;padding:5px;border-radius:6px;border:1px solid rgba(236,72,153,0.3);background:rgba(236,72,153,0.1);color:#ec4899;font-size:11px;font-weight:600;cursor:pointer">Code</button>';
+    toggle.querySelectorAll('.numz-mb-toggle').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        switchMode(btn.dataset.mode);
+        if (btn.dataset.mode === 'chat') {
+          // Remove the mobile top bar and hide container
+          bar.remove();
+        }
+      });
+    });
+    bar.appendChild(toggle);
+    // New Session button
+    var newBtn = document.createElement('button');
+    newBtn.style.cssText = 'background:none;border:none;color:#aaa;cursor:pointer;padding:4px;display:flex';
+    newBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>';
+    newBtn.addEventListener('click', function() { showWorkspacePicker(); });
+    bar.appendChild(newBtn);
+    _numzContainer.insertBefore(bar, _numzContainer.firstChild);
   }
 
   // Keep container position in sync with sidebar width changes
