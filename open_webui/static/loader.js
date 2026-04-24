@@ -153,7 +153,14 @@
     if (!_numzContainer) return;
     var sidebar = document.getElementById('sidebar');
     var sidebarWidth = sidebar ? sidebar.offsetWidth : 0;
-    if (window.innerWidth < 768) sidebarWidth = 0;
+    var isMobile = window.innerWidth < 768;
+    if (isMobile) {
+      sidebarWidth = 0;
+      // On mobile, don't cover the top navbar area — the sidebar toggle + mode slider live there
+      _numzContainer.style.top = '48px';
+    } else {
+      _numzContainer.style.top = '0';
+    }
     _numzContainer.style.left = sidebarWidth + 'px';
   }
 
