@@ -459,14 +459,38 @@
     }
   }
 
+  // Error patterns that are just interrupt/timeout noise — not real errors
+  var _interruptNoise = [
+    'API Error: numz server request timed out',
+    'error_during_execution',
+    'Request interrupted by user',
+    'Tool permission request failed',
+    'Stream closed before response',
+    'Request aborted',
+  ];
+
+  function isInterruptNoise(text) {
+    for (var i = 0; i < _interruptNoise.length; i++) {
+      if (text.indexOf(_interruptNoise[i]) !== -1) return true;
+    }
+    return false;
+  }
+
   function updateText() {
     ensureAssistant();
+    // Filter out interrupt noise from displayed text
+    var displayText = streamingText;
+    _interruptNoise.forEach(function(noise) {
+      displayText = displayText.split(noise).join('');
+    });
+    displayText = displayText.replace(/\[Request interrupted by user\]/g, '').trim();
+    if (!displayText) return; // Don't render empty text
     var textEl = currentAssistantEl.querySelector('.numz-text-content');
     if (!textEl) {
       textEl = el('div', { className: 'numz-text-content' });
       currentAssistantEl.appendChild(textEl);
     }
-    textEl.innerHTML = renderMarkdown(streamingText);
+    textEl.innerHTML = renderMarkdown(displayText);
     scrollBottom();
   }
 
@@ -633,6 +657,9 @@
       for (var i = 0; i < content.length; i++) {
         var part = content[i];
         if (part.type === 'tool_result') {
+          // Filter out interrupt noise from tool results
+          var resultText = typeof part.content === 'string' ? part.content : JSON.stringify(part.content || '');
+          if (part.is_error && isInterruptNoise(resultText)) continue;
           addToolResult(part.tool_use_id, part.content, part.is_error);
         } else if (part.type === 'text' && part.text && !isMetadata(part.text)) {
           addUser(part.text);
@@ -734,7 +761,17 @@
       if (costEl && ev.cost_usd) costEl.textContent = '$' + ev.cost_usd.toFixed(4);
     }
     else if (ev.subtype && ev.subtype.startsWith('error')) {
-      addSystem('Error: ' + (ev.error || ev.subtype), 'error');
+      // Filter out expected interruption errors — these happen when user presses ESC
+      var errMsg = ev.error || ev.subtype || '';
+      if (errMsg.indexOf('interrupted') !== -1 ||
+          errMsg.indexOf('timed out') !== -1 ||
+          errMsg.indexOf('error_during_execution') !== -1 ||
+          errMsg.indexOf('aborted') !== -1 ||
+          errMsg.indexOf('cancelled') !== -1) {
+        // Silently ignore — user interrupted intentionally
+      } else {
+        addSystem('Error: ' + errMsg, 'error');
+      }
     }
 
     setGenerating(false);
