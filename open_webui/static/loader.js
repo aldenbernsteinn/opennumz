@@ -101,24 +101,10 @@
     });
     updateNewChatButton();
     if (codeMode) {
-      // On mobile, close the sidebar first so the Navbar's sidebar button becomes visible
-      if (window.innerWidth < 768) {
-        var closeBtn = document.querySelector('button[aria-label="Close Sidebar"]');
-        if (closeBtn) closeBtn.click();
-        // Wait for sidebar close animation before showing code view
-        setTimeout(function() {
-          showCodeSessions(true);
-          if (_numzContainer) _numzContainer.style.display = '';
-          hideSvelteContent(true);
-        }, 300);
-      } else {
-        showCodeSessions(true);
-        if (_numzContainer) _numzContainer.style.display = '';
-        hideSvelteContent(true);
-      }
+      showCodeSessions(true);
+      if (_numzContainer) _numzContainer.style.display = '';
     } else {
       hideCodeView();
-      hideSvelteContent(false);
     }
   }
 
@@ -147,40 +133,28 @@
     }
   }
 
-  // ── numz container — lives inside the Svelte app layout, not as a body overlay ──
+  // ── numz container — fixed overlay right of sidebar ──────────────
   function ensureNumzContainer() {
     if (_numzContainer && _numzContainer.parentElement) {
       _numzContainer.style.display = '';
+      updateContainerPosition();
       return;
     }
     _numzContainer = document.createElement('div');
     _numzContainer.id = 'numz-container';
-    // Use the same layout as the Svelte slot content — flex:1, fill available space
-    _numzContainer.style.cssText = 'flex:1;background:#0a0a0a;display:flex;flex-direction:column;min-width:0;height:100dvh;max-height:100dvh;overflow:hidden';
-    // Find the Svelte app's content wrapper — the parent of the slot content
-    // Layout is: #app > div > div.flex (contains Sidebar + slot content)
-    var appRoot = document.getElementById('app');
-    var flexParent = appRoot && appRoot.querySelector('div.flex.h-screen, div.flex.min-h-screen');
-    if (flexParent) {
-      flexParent.appendChild(_numzContainer);
-    } else {
-      // Fallback: body overlay (desktop always works)
-      _numzContainer.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;background:#0a0a0a;z-index:9999;display:flex;flex-direction:column';
-      document.body.appendChild(_numzContainer);
-      startPositionSync();
-    }
+    _numzContainer.style.cssText = 'position:fixed;top:0;right:0;bottom:0;background:#0a0a0a;z-index:9999;display:flex;flex-direction:column';
+    document.body.appendChild(_numzContainer);
+    updateContainerPosition();
+    startPositionSync();
     _numzContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#444;font-family:monospace;font-size:14px">Select a session</div>';
   }
 
   function updateContainerPosition() {
     if (!_numzContainer) return;
-    // Only needed for fallback (position:fixed on body)
-    if (_numzContainer.style.position === 'fixed') {
-      var sidebar = document.getElementById('sidebar');
-      var sidebarWidth = sidebar ? sidebar.offsetWidth : 0;
-      if (window.innerWidth < 768) sidebarWidth = 0;
-      _numzContainer.style.left = sidebarWidth + 'px';
-    }
+    var sidebar = document.getElementById('sidebar');
+    var sidebarWidth = sidebar ? sidebar.offsetWidth : 0;
+    if (window.innerWidth < 768) sidebarWidth = 0;
+    _numzContainer.style.left = sidebarWidth + 'px';
   }
 
   // Keep container position in sync with sidebar width changes
@@ -212,52 +186,6 @@
     statusEl.style.color = colors[status] || '';
     statusEl.style.background = bgs[status] || '';
   };
-
-  function hideSvelteContent(hide) {
-    // Find the Svelte slot content (chat page) and hide/show it
-    // It's a sibling of the numz container inside the flex layout
-    var appRoot = document.getElementById('app');
-    if (!appRoot) return;
-    var flexParent = appRoot.querySelector('div.flex.h-screen, div.flex.min-h-screen');
-    if (!flexParent) return;
-    // The slot content is any child that's NOT the sidebar and NOT the numz container
-    Array.from(flexParent.children).forEach(function(child) {
-      if (child.id === 'sidebar' || child.id === 'numz-container') return;
-      if (hide) {
-        // On mobile, don't fully hide — keep the top navbar visible for the sidebar button
-        // The navbar is the first child with the sidebar toggle
-        if (window.innerWidth < 768) {
-          // Make it a thin strip at the top showing just the navbar
-          child.style.position = 'absolute';
-          child.style.top = '0';
-          child.style.left = '0';
-          child.style.right = '0';
-          child.style.height = '44px';
-          child.style.overflow = 'hidden';
-          child.style.zIndex = '50';
-          child.style.pointerEvents = 'auto';
-        } else {
-          child.style.display = 'none';
-        }
-      } else {
-        child.style.display = '';
-        child.style.position = '';
-        child.style.top = '';
-        child.style.left = '';
-        child.style.right = '';
-        child.style.height = '';
-        child.style.overflow = '';
-        child.style.zIndex = '';
-        child.style.pointerEvents = '';
-      }
-    });
-    // On mobile, offset numz container below the navbar strip
-    if (_numzContainer) {
-      _numzContainer.style.marginTop = (hide && window.innerWidth < 768) ? '44px' : '0';
-      _numzContainer.style.height = (hide && window.innerWidth < 768) ? 'calc(100dvh - 44px)' : '100dvh';
-      _numzContainer.style.maxHeight = _numzContainer.style.height;
-    }
-  }
 
   function hideCodeView() {
     if (_numzContainer) _numzContainer.style.display = 'none';
