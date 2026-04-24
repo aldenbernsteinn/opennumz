@@ -381,7 +381,12 @@
 
   function sendInterrupt() {
     if (ws && ws.readyState === 1) {
-      ws.send(JSON.stringify({ type: 'interrupt' }));
+      // numz expects control_request with subtype 'interrupt'
+      ws.send(JSON.stringify({
+        type: 'control_request',
+        request_id: 'interrupt-' + Date.now(),
+        request: { subtype: 'interrupt' }
+      }));
       setGenerating(false);
     }
   }
@@ -834,10 +839,26 @@
       var opt = permOptions[idx];
       if (!opt) return;
       if (opt.action === 'deny') {
-        // Show feedback input
+        // Show feedback input — let user type what to do differently
         permInFeedback = true;
         var fb = document.getElementById('numz-perm-feedback-' + ev.request_id);
-        if (fb) { fb.style.display = ''; var inp = fb.querySelector('input'); if (inp) inp.focus(); }
+        if (fb) {
+          fb.style.display = '';
+          var inp = fb.querySelector('input');
+          if (inp) {
+            inp.focus();
+            // Enter sends, ESC sends without feedback
+            inp.addEventListener('keydown', function(ke) {
+              if (ke.key === 'Enter') {
+                sendPermResponse('deny', inp.value || '');
+                ke.preventDefault();
+              } else if (ke.key === 'Escape') {
+                sendPermResponse('deny', '');
+                ke.preventDefault();
+              }
+            });
+          }
+        }
       } else {
         sendPermResponse(opt.action);
       }
@@ -847,16 +868,19 @@
       // Remove keyboard handler
       document.removeEventListener('keydown', permKeyHandler);
       if (ws && ws.readyState === 1) {
-        var resp = { behavior: action === 'deny' ? 'deny' : 'allow' };
-        if (action === 'always') {
-          resp.updatedPermissions = [{ type: 'addRules', rules: [{ toolName: tool }], behavior: 'allow', destination: 'localSettings' }];
-        }
-        if (action === 'deny' && feedback) {
-          resp.message = feedback;
+        var resp;
+        if (action === 'deny') {
+          // PermissionDenyResultSchema: behavior + message (required)
+          resp = { behavior: 'deny', message: feedback || 'User denied' };
+        } else {
+          // PermissionAllowResultSchema: behavior + updatedInput (required) + updatedPermissions (optional)
+          resp = { behavior: 'allow', updatedInput: input };
+          if (action === 'always') {
+            resp.updatedPermissions = [{ type: 'addRules', rules: [{ toolName: tool }], behavior: 'allow', destination: 'localSettings' }];
+          }
         }
         ws.send(JSON.stringify({
           type: 'control_response',
-          request_id: ev.request_id,
           response: { subtype: 'success', request_id: ev.request_id, response: resp }
         }));
       }
@@ -867,15 +891,7 @@
     // Keyboard navigation
     function permKeyHandler(e) {
       if (permInFeedback) {
-        // In feedback mode — Enter sends, Escape cancels
-        if (e.key === 'Enter') {
-          var fbInput = perm.querySelector('#numz-perm-feedback-' + ev.request_id + ' input');
-          sendPermResponse('deny', fbInput ? fbInput.value : '');
-          e.preventDefault();
-        } else if (e.key === 'Escape') {
-          sendPermResponse('deny', '');
-          e.preventDefault();
-        }
+        // Feedback input handles its own keys
         return;
       }
       if (e.key === 'ArrowUp' || e.key === 'k') { permFocused = Math.max(0, permFocused - 1); highlightPermOption(); e.preventDefault(); }
