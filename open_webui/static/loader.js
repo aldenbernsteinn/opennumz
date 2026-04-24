@@ -101,10 +101,13 @@
     });
     updateNewChatButton();
     if (codeMode) {
-      showCodeSessions(true); // autoOpen most recent session
+      showCodeSessions(true);
       if (_numzContainer) _numzContainer.style.display = '';
+      // Hide the Svelte chat content — numz container replaces it
+      hideSvelteContent(true);
     } else {
       hideCodeView();
+      hideSvelteContent(false);
     }
   }
 
@@ -133,34 +136,40 @@
     }
   }
 
-  // ── numz container — fixed overlay right of sidebar ──────────────
+  // ── numz container — lives inside the Svelte app layout, not as a body overlay ──
   function ensureNumzContainer() {
     if (_numzContainer && _numzContainer.parentElement) {
       _numzContainer.style.display = '';
-      updateContainerPosition();
       return;
     }
     _numzContainer = document.createElement('div');
     _numzContainer.id = 'numz-container';
-    _numzContainer.style.cssText = 'position:fixed;top:0;right:0;bottom:0;background:#0a0a0a;z-index:9999;display:flex;flex-direction:column';
-    document.body.appendChild(_numzContainer);
-    updateContainerPosition();
-    startPositionSync();
+    // Use the same layout as the Svelte slot content — flex:1, fill available space
+    _numzContainer.style.cssText = 'flex:1;background:#0a0a0a;display:flex;flex-direction:column;min-width:0;height:100dvh;max-height:100dvh;overflow:hidden';
+    // Find the Svelte app's content wrapper — the parent of the slot content
+    // Layout is: #app > div > div.flex (contains Sidebar + slot content)
+    var appRoot = document.getElementById('app');
+    var flexParent = appRoot && appRoot.querySelector('div.flex.h-screen, div.flex.min-h-screen');
+    if (flexParent) {
+      flexParent.appendChild(_numzContainer);
+    } else {
+      // Fallback: body overlay (desktop always works)
+      _numzContainer.style.cssText = 'position:fixed;top:0;right:0;bottom:0;left:0;background:#0a0a0a;z-index:9999;display:flex;flex-direction:column';
+      document.body.appendChild(_numzContainer);
+      startPositionSync();
+    }
     _numzContainer.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#444;font-family:monospace;font-size:14px">Select a session</div>';
   }
 
   function updateContainerPosition() {
     if (!_numzContainer) return;
-    var sidebar = document.getElementById('sidebar');
-    var sidebarWidth = sidebar ? sidebar.offsetWidth : 0;
-    if (window.innerWidth < 768) sidebarWidth = 0;
-    _numzContainer.style.left = sidebarWidth + 'px';
-    _numzContainer.style.top = '0';
-    // On mobile, z-index below the sidebar (z-50) so sidebar opens on top when toggled
-    _numzContainer.style.zIndex = (window.innerWidth < 768) ? '40' : '9999';
-    // Remove any leftover hamburger button
-    var stale = document.getElementById('numz-sidebar-btn');
-    if (stale) stale.remove();
+    // Only needed for fallback (position:fixed on body)
+    if (_numzContainer.style.position === 'fixed') {
+      var sidebar = document.getElementById('sidebar');
+      var sidebarWidth = sidebar ? sidebar.offsetWidth : 0;
+      if (window.innerWidth < 768) sidebarWidth = 0;
+      _numzContainer.style.left = sidebarWidth + 'px';
+    }
   }
 
   // Keep container position in sync with sidebar width changes
@@ -192,6 +201,20 @@
     statusEl.style.color = colors[status] || '';
     statusEl.style.background = bgs[status] || '';
   };
+
+  function hideSvelteContent(hide) {
+    // Find the Svelte slot content (chat page) and hide/show it
+    // It's a sibling of the numz container inside the flex layout
+    var appRoot = document.getElementById('app');
+    if (!appRoot) return;
+    var flexParent = appRoot.querySelector('div.flex.h-screen, div.flex.min-h-screen');
+    if (!flexParent) return;
+    // The slot content is any child that's NOT the sidebar and NOT the numz container
+    Array.from(flexParent.children).forEach(function(child) {
+      if (child.id === 'sidebar' || child.id === 'numz-container') return;
+      child.style.display = hide ? 'none' : '';
+    });
+  }
 
   function hideCodeView() {
     if (_numzContainer) _numzContainer.style.display = 'none';
