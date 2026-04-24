@@ -110,32 +110,26 @@
 
   // Change New Chat button to "New Session" with code icon in code mode
   var _newChatInterval = null;
+  var PENCIL_ICON = '<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="size-4.5"><path stroke-linecap="round" stroke-linejoin="round" d="m16.862 4.487 1.687-1.688a1.875 1.875 0 1 1 2.652 2.652L10.582 16.07a4.5 4.5 0 0 1-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 0 1 1.13-1.897l8.932-8.931Zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0 1 15.75 21H5.25A2.25 2.25 0 0 1 3 18.75V8.25A2.25 2.25 0 0 1 5.25 6H10"/></svg>';
+  var TERMINAL_ICON = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4.5"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>';
   function updateNewChatButton() {
-    // Find ALL elements that say "New Chat" in the sidebar and change them
     var link = document.querySelector('#sidebar a[href="/"][aria-label]');
-    if (link) {
-      var iconContainer = link.querySelector('div.self-center');
-      if (iconContainer && codeMode) {
-        link.setAttribute('aria-label', 'New Session');
-        // Only replace if it still has the pencil icon (avoid re-setting our icon)
-        if (iconContainer.innerHTML.indexOf('polyline') === -1) {
-          iconContainer.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="size-4.5"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>';
-        }
-      } else if (iconContainer && !codeMode) {
-        link.setAttribute('aria-label', 'New Chat');
-      }
-    }
-    // Also replace tooltip text — Svelte renders tooltips as floating divs
+    if (!link) return;
+    var iconContainer = link.querySelector('div.self-center');
+    if (!iconContainer) return;
     if (codeMode) {
-      document.querySelectorAll('[role="tooltip"], [data-tooltip]').forEach(function(el) {
-        if (el.textContent.trim() === 'New Chat') el.textContent = 'New Session';
-      });
-    }
-    if (codeMode && !_newChatInterval) {
-      _newChatInterval = setInterval(updateNewChatButton, 500);
-    } else if (!codeMode && _newChatInterval) {
-      clearInterval(_newChatInterval);
-      _newChatInterval = null;
+      link.setAttribute('aria-label', 'New Session');
+      if (iconContainer.innerHTML.indexOf('polyline') === -1) {
+        iconContainer.innerHTML = TERMINAL_ICON;
+      }
+      if (!_newChatInterval) _newChatInterval = setInterval(updateNewChatButton, 500);
+    } else {
+      link.setAttribute('aria-label', 'New Chat');
+      // Restore pencil icon if we replaced it
+      if (iconContainer.innerHTML.indexOf('polyline') !== -1) {
+        iconContainer.innerHTML = PENCIL_ICON;
+      }
+      if (_newChatInterval) { clearInterval(_newChatInterval); _newChatInterval = null; }
     }
   }
 
