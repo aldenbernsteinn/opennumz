@@ -3348,7 +3348,7 @@ async def numz_websocket(ws: _WS):
     await ws.accept()
 
     session_id = ws.query_params.get('session', '')
-    cwd = ws.query_params.get('cwd', '') or os.path.expanduser('~')
+    cwd = os.path.expanduser(ws.query_params.get('cwd', '') or '~')
 
     # New sessions have no session_id yet — generate a temp key, numz will create the real one
     from uuid import uuid4 as _uuid4
