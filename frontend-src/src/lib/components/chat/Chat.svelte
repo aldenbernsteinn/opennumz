@@ -94,7 +94,7 @@
 	import { updateFolderById } from '$lib/apis/folders';
 
 	import Banner from '../common/Banner.svelte';
-	import MessageInput, { _imageGenOn } from '$lib/components/chat/MessageInput.svelte';
+	import MessageInput from '$lib/components/chat/MessageInput.svelte';
 	import Messages from '$lib/components/chat/Messages.svelte';
 	import Navbar from '$lib/components/chat/Navbar.svelte';
 	import ChatControls from './ChatControls.svelte';
@@ -3049,7 +3049,9 @@
 										clearDraft();
 										if (e.detail || files.length > 0) {
 											await tick();
-											if (_imageGenOn) {
+											// Check if image gen button is active (has .active class)
+											const imgBtn = document.getElementById('image-gen-btn');
+											if (imgBtn && imgBtn.classList.contains('active')) {
 												await handleImageGeneration(e.detail);
 											} else {
 												submitPrompt(e.detail.replaceAll('\n\n', '\n'));

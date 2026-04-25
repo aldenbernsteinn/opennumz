@@ -1921,10 +1921,7 @@
 										{/if}
 
 										{#if !history?.currentId || history.messages[history.currentId]?.done == true}
-											<!-- Terminal Server Selector -->
-											{#if ($terminalServers ?? []).length > 0 || ($settings?.terminalServers ?? []).some((s) => s.url)}
-												<TerminalMenu bind:show={showTerminalMenu} />
-											{/if}
+											<!-- Terminal Server Selector — only for code mode, hidden in chat -->
 
 											{#if $_user?.role === 'admin' || ($_user?.permissions?.chat?.stt ?? true)}
 												<!-- {$i18n.t('Record voice')} -->
