@@ -3179,76 +3179,17 @@ async def generate_image(request: Request):
 
     logging.info(f'[image] Enhanced prompt: {enhanced_prompt[:200]}...')
 
-    # Step 2: Stop Qwen (llama-server) to free VRAM
-    logging.info('[image] Stopping numz-server to free VRAM...')
-    stop_result = _sp.run(['systemctl', '--user', 'stop', 'numz-server'], capture_output=True, text=True)
-    logging.info(f'[image] Stop result: rc={stop_result.returncode} stderr={stop_result.stderr.strip()}')
-    await _aio.sleep(3)  # wait for VRAM to free
-    # Verify VRAM is free
-    vram_check = _sp.run(['nvidia-smi', '--query-gpu=memory.used', '--format=csv,noheader'], capture_output=True, text=True)
-    logging.info(f'[image] VRAM after stop: {vram_check.stdout.strip()}')
-
-    # Step 3: Start image server, generate, then kill it
-    img_proc = None
+    # Step 2: Generate image via image server (runs alongside Qwen, no swapping)
     result = None
     try:
-        # Spawn image server
-        img_proc = _sp.Popen(
-            ['/home/aldenb/.numz/image-venv/bin/python',
-             '/home/aldenb/opennumz/open_webui/scripts/image_server.py'],
-            env={**os.environ, 'IMAGE_SERVER_PORT': '8898', 'IMAGE_SERVER_HOST': '127.0.0.1',
-                 'ERNIE_MODEL': '/home/aldenb/.numz/models/ernie-image-turbo', 'ERNIE_IDLE_UNLOAD': '30'},
-        )
-        logging.info(f'[image] Image server started, pid={img_proc.pid}')
-
-        # Wait for it to be ready
-        for _ in range(60):
-            await _aio.sleep(1)
-            try:
-                async with _aiohttp_img.ClientSession(timeout=_aiohttp_img.ClientTimeout(total=3)) as s:
-                    async with s.get(f'{IMAGE_SERVER_URL}/health') as r:
-                        if r.status == 200:
-                            break
-            except Exception:
-                pass
-
-        # Generate
-        async with _aiohttp_img.ClientSession(timeout=_aiohttp_img.ClientTimeout(total=300)) as session:
-            if source_image_id and not new_context:
-                source_path = IMAGE_STORE_DIR / chat_id / f'{source_image_id}.png'
-                if source_path.exists():
-                    import base64 as _b64
-                    source_b64 = _b64.b64encode(source_path.read_bytes()).decode('utf-8')
-                    async with session.post(f'{IMAGE_SERVER_URL}/edit', json={
-                        'prompt': enhanced_prompt, 'image_base64': source_b64,
-                        'width': width, 'height': height,
-                    }) as resp:
-                        result = await resp.json()
-                else:
-                    async with session.post(f'{IMAGE_SERVER_URL}/generate', json={
-                        'prompt': enhanced_prompt, 'width': width, 'height': height,
-                    }) as resp:
-                        result = await resp.json()
-            else:
-                async with session.post(f'{IMAGE_SERVER_URL}/generate', json={
-                    'prompt': enhanced_prompt, 'width': width, 'height': height,
-                }) as resp:
-                    result = await resp.json()
-
+        async with _aiohttp_img.ClientSession(timeout=_aiohttp_img.ClientTimeout(total=180)) as session:
+            async with session.post(f'{IMAGE_SERVER_URL}/generate', json={
+                'prompt': enhanced_prompt, 'width': width, 'height': height,
+            }) as resp:
+                result = await resp.json()
     except Exception as e:
         logging.error(f'[image] Generation failed: {e}')
         result = {'error': str(e)}
-    finally:
-        # Step 4: Kill image server and restart Qwen
-        if img_proc:
-            img_proc.terminate()
-            try:
-                img_proc.wait(timeout=5)
-            except Exception:
-                img_proc.kill()
-            logging.info('[image] Image server killed')
-        logging.info('[image] Restarting llama-server...')
-        _sp.run(['systemctl', '--user', 'start', 'numz-server'], capture_output=True)
 
     if not result or 'error' in result:
         return JSONResponse(result or {'error': 'Unknown error'}, status_code=502)
