@@ -3107,9 +3107,10 @@ async def numz_git_command(request: Request):
 # Deleted when chat is deleted.
 
 import aiohttp as _aiohttp_img
+from pathlib import Path as _Path
 
 IMAGE_SERVER_URL = os.environ.get('IMAGE_SERVER_URL', 'http://127.0.0.1:8898')
-IMAGE_STORE_DIR = Path(os.path.expanduser('~/.open-webui/images'))
+IMAGE_STORE_DIR = _Path(os.path.expanduser('~/.open-webui/images'))
 
 # The detailed caption prompt for Qwen to rewrite user prompts
 _IMAGE_REWRITE_SYSTEM = '''You are an intelligent image description assistant. Generate a detailed, informative, and objective image description for high-quality image generation.
