@@ -3180,9 +3180,13 @@ async def generate_image(request: Request):
     logging.info(f'[image] Enhanced prompt: {enhanced_prompt[:200]}...')
 
     # Step 2: Stop Qwen (llama-server) to free VRAM
-    logging.info('[image] Stopping llama-server to free VRAM...')
-    _sp.run(['systemctl', '--user', 'stop', 'numz-server'], capture_output=True)
-    await _aio.sleep(2)  # wait for VRAM to free
+    logging.info('[image] Stopping numz-server to free VRAM...')
+    stop_result = _sp.run(['systemctl', '--user', 'stop', 'numz-server'], capture_output=True, text=True)
+    logging.info(f'[image] Stop result: rc={stop_result.returncode} stderr={stop_result.stderr.strip()}')
+    await _aio.sleep(3)  # wait for VRAM to free
+    # Verify VRAM is free
+    vram_check = _sp.run(['nvidia-smi', '--query-gpu=memory.used', '--format=csv,noheader'], capture_output=True, text=True)
+    logging.info(f'[image] VRAM after stop: {vram_check.stdout.strip()}')
 
     # Step 3: Start image server, generate, then kill it
     img_proc = None

@@ -1865,7 +1865,7 @@
 										type="button"
 										class="thinking-toggle-btn{imageGenOn ? ' active' : ''}"
 										title={imageGenOn ? 'Image ON' : 'Image OFF'}
-										on:click={() => { imageGenOn = !imageGenOn; _imageGenOn = imageGenOn; }}
+										on:click={() => { imageGenOn = !imageGenOn; _imageGenOn = imageGenOn; (window as any)._imageGenOn = imageGenOn; }}
 									>
 										Image
 									</button>

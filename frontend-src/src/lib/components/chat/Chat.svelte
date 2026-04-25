@@ -3049,9 +3049,8 @@
 										clearDraft();
 										if (e.detail || files.length > 0) {
 											await tick();
-											// Check if image gen button is active (has .active class)
-											const imgBtn = document.getElementById('image-gen-btn');
-											if (imgBtn && imgBtn.classList.contains('active')) {
+											// Check window global set by ImageGen button
+											if ((window as any)._imageGenOn) {
 												await handleImageGeneration(e.detail);
 											} else {
 												submitPrompt(e.detail.replaceAll('\n\n', '\n'));
