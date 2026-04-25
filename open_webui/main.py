@@ -3178,42 +3178,75 @@ async def generate_image(request: Request):
 
     logging.info(f'[image] Enhanced prompt: {enhanced_prompt[:200]}...')
 
-    # Step 2: Generate or edit image via image server
+    # Step 2: Stop Qwen (llama-server) to free VRAM
+    logging.info('[image] Stopping llama-server to free VRAM...')
+    _sp.run(['systemctl', '--user', 'stop', 'numz-server'], capture_output=True)
+    await _aio.sleep(2)  # wait for VRAM to free
+
+    # Step 3: Start image server, generate, then kill it
+    img_proc = None
+    result = None
     try:
+        # Spawn image server
+        img_proc = _sp.Popen(
+            ['/home/aldenb/.numz/image-venv/bin/python',
+             '/home/aldenb/opennumz/open_webui/scripts/image_server.py'],
+            env={**os.environ, 'IMAGE_SERVER_PORT': '8898', 'IMAGE_SERVER_HOST': '127.0.0.1',
+                 'ERNIE_MODEL': '/home/aldenb/.numz/models/ernie-image-turbo', 'ERNIE_IDLE_UNLOAD': '30'},
+        )
+        logging.info(f'[image] Image server started, pid={img_proc.pid}')
+
+        # Wait for it to be ready
+        for _ in range(60):
+            await _aio.sleep(1)
+            try:
+                async with _aiohttp_img.ClientSession(timeout=_aiohttp_img.ClientTimeout(total=3)) as s:
+                    async with s.get(f'{IMAGE_SERVER_URL}/health') as r:
+                        if r.status == 200:
+                            break
+            except Exception:
+                pass
+
+        # Generate
         async with _aiohttp_img.ClientSession(timeout=_aiohttp_img.ClientTimeout(total=300)) as session:
             if source_image_id and not new_context:
-                # img2img edit — load the source image
                 source_path = IMAGE_STORE_DIR / chat_id / f'{source_image_id}.png'
                 if source_path.exists():
                     import base64 as _b64
                     source_b64 = _b64.b64encode(source_path.read_bytes()).decode('utf-8')
-                    async with session.post(
-                        f'{IMAGE_SERVER_URL}/edit',
-                        json={
-                            'prompt': enhanced_prompt,
-                            'image_base64': source_b64,
-                            'width': width,
-                            'height': height,
-                        },
-                    ) as resp:
+                    async with session.post(f'{IMAGE_SERVER_URL}/edit', json={
+                        'prompt': enhanced_prompt, 'image_base64': source_b64,
+                        'width': width, 'height': height,
+                    }) as resp:
                         result = await resp.json()
                 else:
-                    # Source not found, generate new
-                    async with session.post(
-                        f'{IMAGE_SERVER_URL}/generate',
-                        json={'prompt': enhanced_prompt, 'width': width, 'height': height},
-                    ) as resp:
+                    async with session.post(f'{IMAGE_SERVER_URL}/generate', json={
+                        'prompt': enhanced_prompt, 'width': width, 'height': height,
+                    }) as resp:
                         result = await resp.json()
             else:
-                # New image generation
-                async with session.post(
-                    f'{IMAGE_SERVER_URL}/generate',
-                    json={'prompt': enhanced_prompt, 'width': width, 'height': height},
-                ) as resp:
+                async with session.post(f'{IMAGE_SERVER_URL}/generate', json={
+                    'prompt': enhanced_prompt, 'width': width, 'height': height,
+                }) as resp:
                     result = await resp.json()
+
     except Exception as e:
         logging.error(f'[image] Generation failed: {e}')
-        return JSONResponse({'error': f'Image generation failed: {e}'}, status_code=502)
+        result = {'error': str(e)}
+    finally:
+        # Step 4: Kill image server and restart Qwen
+        if img_proc:
+            img_proc.terminate()
+            try:
+                img_proc.wait(timeout=5)
+            except Exception:
+                img_proc.kill()
+            logging.info('[image] Image server killed')
+        logging.info('[image] Restarting llama-server...')
+        _sp.run(['systemctl', '--user', 'start', 'numz-server'], capture_output=True)
+
+    if not result or 'error' in result:
+        return JSONResponse(result or {'error': 'Unknown error'}, status_code=502)
 
     if 'error' in result:
         return JSONResponse(result, status_code=502)
