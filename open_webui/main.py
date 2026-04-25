@@ -3254,6 +3254,127 @@ except Exception as e:
     logging.warning(f'[image] Could not patch chat delete: {e}')
 
 
+# ── Video Studio (LTX-2.3) ──────────────────────────────────────────────
+#
+# LTX-Desktop backend runs on port 8001 (separate process).
+# These endpoints proxy to it, handling model swap (stop Qwen → LTX → restart Qwen).
+
+LTX_SERVER_URL = os.environ.get('LTX_SERVER_URL', 'http://127.0.0.1:8001')
+
+# Storyboard system prompt for Qwen
+_STORYBOARD_SYSTEM = '''You are a video storyboard assistant. Given a story idea, output a structured storyboard in JSON.
+
+Output format:
+{
+  "title": "Story title",
+  "scenes": [
+    {
+      "id": 1,
+      "description": "Brief scene description",
+      "prompt": "Detailed cinematic video generation prompt (describe visuals, lighting, camera, action)",
+      "duration": 5,
+      "cameraMotion": "dolly_in",
+      "resolution": "1080p",
+      "aspectRatio": "16:9",
+      "audio": true
+    }
+  ]
+}
+
+Camera motion options: none, dolly_in, dolly_out, dolly_left, dolly_right, jib_up, jib_down, static, focus_shift.
+Duration range: 2-10 seconds per scene.
+Write prompts that are visually descriptive and cinematic.
+Output ONLY valid JSON, no other text.'''
+
+
+@app.post('/api/studio/storyboard')
+async def generate_storyboard(request: Request):
+    """Qwen generates a storyboard from a story idea."""
+    body = await request.json()
+    idea = body.get('idea', '')
+    if not idea:
+        return JSONResponse({'error': 'No story idea'}, status_code=400)
+
+    try:
+        llm_url = os.environ.get('OPENAI_API_BASE_URL', 'http://100.103.233.31:8899/v1')
+        async with _aiohttp_img.ClientSession(timeout=_aiohttp_img.ClientTimeout(total=120)) as session:
+            async with session.post(f'{llm_url}/chat/completions', json={
+                'model': 'numz',
+                'messages': [
+                    {'role': 'system', 'content': _STORYBOARD_SYSTEM},
+                    {'role': 'user', 'content': idea},
+                ],
+                'stream': False,
+                'chat_template_kwargs': {'enable_thinking': False},
+            }) as resp:
+                data = await resp.json()
+                text = data.get('choices', [{}])[0].get('message', {}).get('content', '')
+
+        # Parse JSON from response
+        clean = text.strip()
+        if clean.startswith('```'): clean = clean.split('\n', 1)[1].rsplit('```', 1)[0]
+        storyboard = json.loads(clean)
+        return storyboard
+
+    except Exception as e:
+        logging.error(f'[studio] Storyboard generation failed: {e}')
+        return JSONResponse({'error': str(e)}, status_code=500)
+
+
+@app.post('/api/studio/generate-scene')
+async def generate_scene(request: Request):
+    """Generate a single video scene via LTX backend (with model swap)."""
+    body = await request.json()
+
+    # Step 1: Stop Qwen to free VRAM for LTX
+    logging.info('[studio] Stopping numz-server for LTX generation...')
+    _sp.run(['systemctl', '--user', 'stop', 'numz-server'], capture_output=True)
+    await _aio.sleep(3)
+
+    try:
+        # Step 2: Start LTX server if not running
+        _sp.run(['systemctl', '--user', 'start', 'ltx-server'], capture_output=True)
+
+        # Wait for LTX to be ready
+        for _ in range(60):
+            await _aio.sleep(2)
+            try:
+                async with _aiohttp_img.ClientSession(timeout=_aiohttp_img.ClientTimeout(total=3)) as s:
+                    async with s.get(f'{LTX_SERVER_URL}/api/health') as r:
+                        if r.status == 200:
+                            break
+            except Exception:
+                pass
+
+        # Step 3: Generate video
+        async with _aiohttp_img.ClientSession(timeout=_aiohttp_img.ClientTimeout(total=600)) as session:
+            async with session.post(f'{LTX_SERVER_URL}/api/generate', json=body) as resp:
+                result = await resp.json()
+
+        return result
+
+    except Exception as e:
+        logging.error(f'[studio] Scene generation failed: {e}')
+        return JSONResponse({'error': str(e)}, status_code=502)
+    finally:
+        # Step 4: Stop LTX, restart Qwen
+        _sp.run(['systemctl', '--user', 'stop', 'ltx-server'], capture_output=True)
+        await _aio.sleep(2)
+        logging.info('[studio] Restarting numz-server...')
+        _sp.run(['systemctl', '--user', 'start', 'numz-server'], capture_output=True)
+
+
+@app.get('/api/studio/progress')
+async def scene_progress():
+    """Get LTX generation progress."""
+    try:
+        async with _aiohttp_img.ClientSession(timeout=_aiohttp_img.ClientTimeout(total=5)) as session:
+            async with session.get(f'{LTX_SERVER_URL}/api/generation/progress') as resp:
+                return await resp.json()
+    except Exception:
+        return {'status': 'idle'}
+
+
 @app.post('/api/numz/mkdir')
 async def mkdir_directory(request: Request):
     """Create a directory. Limited to home tree."""
