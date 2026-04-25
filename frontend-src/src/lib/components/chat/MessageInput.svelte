@@ -135,8 +135,8 @@
 
 	let showTerminalMenu = false;
 
-	// Image generation toggle
-	export let imageGenOn = false;
+	// Image generation toggle — bound from Chat.svelte, no default reset
+	export let imageGenOn;
 
 	// Thinking toggle — matches the numz model's /think system prompt mechanism
 	let thinkingOn = false;

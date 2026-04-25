@@ -1174,7 +1174,10 @@ async def generate_chat_completion(
                 if not _msg['content']:
                     payload['messages'] = [m for m in payload['messages'] if m is not _msg]
                 break
-    payload.setdefault('chat_template_kwargs', {})['enable_thinking'] = _thinking_on
+    # Force set enable_thinking — override any existing value
+    if 'chat_template_kwargs' not in payload:
+        payload['chat_template_kwargs'] = {}
+    payload['chat_template_kwargs']['enable_thinking'] = _thinking_on
 
     payload = json.dumps(payload)
 
