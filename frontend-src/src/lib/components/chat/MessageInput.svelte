@@ -140,8 +140,8 @@
 
 	let showTerminalMenu = false;
 
-	// Image generation toggle — uses module-level state to survive re-renders
-	$: imageGenOn = _imageGenOn;
+	// Image generation toggle — instance var for reactivity, module var for persistence
+	let imageGenOn = _imageGenOn;
 
 	// Thinking toggle — matches the numz model's /think system prompt mechanism
 	let thinkingOn = false;
@@ -1863,9 +1863,9 @@
 									<button
 										id="image-gen-btn"
 										type="button"
-										class="thinking-toggle-btn{_imageGenOn ? ' active' : ''}"
-										title={_imageGenOn ? 'Image ON' : 'Image OFF'}
-										on:click={() => { _imageGenOn = !_imageGenOn; }}
+										class="thinking-toggle-btn{imageGenOn ? ' active' : ''}"
+										title={imageGenOn ? 'Image ON' : 'Image OFF'}
+										on:click={() => { imageGenOn = !imageGenOn; _imageGenOn = imageGenOn; }}
 									>
 										Image
 									</button>
