@@ -38,7 +38,7 @@ app = FastAPI()
 
 # ── Config ──────────────────────────────────────────────────────────────
 
-MODEL_ID = os.environ.get('ERNIE_MODEL', 'baidu/ERNIE-Image-Turbo')
+MODEL_ID = os.environ.get('ERNIE_MODEL', '/home/aldenb/.numz/models/ernie-image-turbo')
 MODEL_CACHE = Path(os.environ.get('ERNIE_CACHE', os.path.expanduser('~/.numz/models/ernie-image')))
 PORT = int(os.environ.get('IMAGE_SERVER_PORT', '8898'))
 HOST = os.environ.get('IMAGE_SERVER_HOST', '127.0.0.1')
