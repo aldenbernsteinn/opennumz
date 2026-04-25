@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Video Studio</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,system-ui,sans-serif;background:#0a0a0a;color:#e0e0e0;min-height:100vh}
+.app{display:flex;flex-direction:column;height:100vh}
+
+/* Top bar */
+.topbar{display:flex;align-items:center;padding:12px 20px;border-bottom:1px solid rgba(255,255,255,0.06);gap:16px;flex-shrink:0}
+.topbar a{color:#666;text-decoration:none;font-size:14px}
+.topbar h1{font-size:16px;font-weight:700;color:#fff;flex:1}
+.topbar .status{font-size:12px;color:#555;padding:4px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06)}
+
+/* Main layout */
+.main{display:flex;flex:1;min-height:0;overflow:hidden}
+
+/* Left panel — storyboard */
+.storyboard-panel{width:360px;border-right:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column;flex-shrink:0}
+.panel-header{padding:12px 16px;border-bottom:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:space-between}
+.panel-header h2{font-size:13px;font-weight:600;color:#aaa;text-transform:uppercase;letter-spacing:0.5px}
+.panel-content{flex:1;overflow-y:auto;padding:8px}
+
+/* Story input */
+.story-input{margin:8px;padding:12px;background:#111;border:1px solid rgba(255,255,255,0.06);border-radius:10px}
+.story-input textarea{width:100%;min-height:80px;padding:10px;background:#0a0a0a;border:1px solid rgba(255,255,255,0.08);border-radius:8px;color:#ccc;font-size:13px;resize:vertical;font-family:inherit}
+.story-input button{margin-top:8px;width:100%;padding:8px;border-radius:8px;border:none;background:#e5e5e5;color:#1a1a1a;font-size:13px;font-weight:600;cursor:pointer}
+.story-input button:disabled{opacity:0.5;cursor:not-allowed}
+
+/* Scene card */
+.scene-card{margin:6px 8px;padding:12px;background:#111;border:1px solid rgba(255,255,255,0.06);border-radius:10px;cursor:pointer;transition:border-color 0.15s}
+.scene-card:hover{border-color:rgba(255,255,255,0.12)}
+.scene-card.selected{border-color:rgba(236,72,153,0.4);background:rgba(236,72,153,0.03)}
+.scene-card .scene-num{font-size:10px;color:#666;text-transform:uppercase;letter-spacing:1px;margin-bottom:4px}
+.scene-card .scene-desc{font-size:13px;color:#ccc;margin-bottom:6px}
+.scene-card .scene-meta{display:flex;gap:8px;font-size:11px;color:#555}
+.scene-card .scene-meta span{padding:2px 6px;border-radius:4px;background:rgba(255,255,255,0.03)}
+
+/* Center — preview */
+.preview-panel{flex:1;display:flex;flex-direction:column;min-width:0}
+.preview-area{flex:1;display:flex;align-items:center;justify-content:center;background:#050505;position:relative}
+.preview-area video,.preview-area img{max-width:100%;max-height:100%;object-fit:contain}
+.preview-placeholder{color:#333;font-size:14px;text-align:center}
+.preview-placeholder svg{display:block;margin:0 auto 12px;opacity:0.2}
+
+/* Controls under preview */
+.gen-controls{padding:12px 16px;border-top:1px solid rgba(255,255,255,0.06);display:flex;gap:8px;align-items:center}
+.gen-controls button{padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none;font-family:inherit}
+.gen-controls .btn-generate{background:#ec4899;color:#fff}
+.gen-controls .btn-generate:disabled{opacity:0.5;cursor:not-allowed}
+.gen-controls .btn-cancel{background:#333;color:#ccc}
+.gen-controls .btn-render-all{background:#22c55e;color:#fff}
+.gen-controls .progress-bar{flex:1;height:4px;background:#1a1a1a;border-radius:2px;overflow:hidden}
+.gen-controls .progress-fill{height:100%;background:#ec4899;transition:width 0.3s}
+.gen-controls .progress-text{font-size:11px;color:#666;min-width:60px;text-align:right}
+
+/* Right panel — scene details */
+.details-panel{width:300px;border-left:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column;flex-shrink:0}
+.detail-field{padding:8px 16px}
+.detail-field label{display:block;font-size:11px;color:#666;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.5px}
+.detail-field input,.detail-field textarea,.detail-field select{width:100%;padding:8px;background:#111;border:1px solid rgba(255,255,255,0.06);border-radius:6px;color:#ccc;font-size:12px;font-family:inherit}
+.detail-field textarea{min-height:60px;resize:vertical}
+
+/* Timeline */
+.timeline{height:80px;border-top:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;padding:8px 16px;gap:4px;overflow-x:auto;flex-shrink:0}
+.timeline-clip{height:50px;min-width:60px;background:#1a1a1a;border:1px solid rgba(255,255,255,0.06);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#666;cursor:pointer;flex-shrink:0;position:relative}
+.timeline-clip.rendered{background:rgba(236,72,153,0.08);border-color:rgba(236,72,153,0.2)}
+.timeline-clip.selected{border-color:#ec4899}
+.timeline-clip.rendering{animation:pulse 1.5s ease-in-out infinite}
+@keyframes pulse{0%,100%{opacity:0.5}50%{opacity:1}}
+
+/* Loading overlay */
+.loading-overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,0.7);gap:12px}
+.loading-overlay .spinner{width:32px;height:32px;border:3px solid rgba(236,72,153,0.2);border-top-color:#ec4899;border-radius:50%;animation:spin 0.8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-overlay .loading-text{font-size:13px;color:#aaa}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="topbar">
+    <a href="/">&larr; Chat</a>
+    <h1>Video Studio</h1>
+    <span class="status" id="server-status">Checking...</span>
+  </div>
+
+  <div class="main">
+    <!-- Left: Storyboard -->
+    <div class="storyboard-panel">
+      <div class="panel-header">
+        <h2>Storyboard</h2>
+      </div>
+      <div class="story-input">
+        <textarea id="story-idea" placeholder="Describe your story idea...&#10;&#10;e.g. A cat discovers a tiny door in the wall that leads to a magical garden"></textarea>
+        <button id="generate-storyboard" onclick="generateStoryboard()">Generate Storyboard</button>
+      </div>
+      <div class="panel-content" id="scenes-list"></div>
+    </div>
+
+    <!-- Center: Preview -->
+    <div class="preview-panel">
+      <div class="preview-area" id="preview-area">
+        <div class="preview-placeholder">
+          <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Generate a storyboard to get started
+        </div>
+      </div>
+      <div class="gen-controls">
+        <button class="btn-generate" id="btn-generate" onclick="generateSelectedScene()" disabled>Generate Scene</button>
+        <button class="btn-render-all" id="btn-render-all" onclick="renderAllScenes()" disabled>Render All</button>
+        <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+        <span class="progress-text" id="progress-text"></span>
+      </div>
+    </div>
+
+    <!-- Right: Scene Details -->
+    <div class="details-panel">
+      <div class="panel-header"><h2>Scene Details</h2></div>
+      <div id="scene-details" style="flex:1;overflow-y:auto">
+        <div style="padding:20px;text-align:center;color:#444;font-size:12px">Select a scene</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Timeline -->
+  <div class="timeline" id="timeline"></div>
+</div>
+
+<script>
+var TOKEN = null;
+var storyboard = null;
+var selectedScene = null;
+var generating = false;
+var renderedScenes = {}; // scene id → video path
+
+// Auth
+fetch('/api/v1/auths/signin', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email:'admin@localhost',password:'admin'})})
+  .then(r => r.json()).then(d => { TOKEN = d.token; });
+
+// Check LTX server status
+async function checkStatus() {
+  try {
+    var r = await fetch('/api/studio/progress');
+    var d = await r.json();
+    document.getElementById('server-status').textContent = d.status || 'Ready';
+  } catch(e) {
+    document.getElementById('server-status').textContent = 'LTX Offline';
+  }
+}
+checkStatus();
+setInterval(checkStatus, 10000);
+
+// Generate storyboard from idea
+async function generateStoryboard() {
+  var idea = document.getElementById('story-idea').value.trim();
+  if (!idea) return;
+  var btn = document.getElementById('generate-storyboard');
+  btn.disabled = true;
+  btn.textContent = 'Generating...';
+
+  try {
+    var r = await fetch('/api/studio/storyboard', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({idea: idea})
+    });
+    storyboard = await r.json();
+    renderScenesList();
+    renderTimeline();
+    document.getElementById('btn-generate').disabled = false;
+    document.getElementById('btn-render-all').disabled = false;
+    if (storyboard.scenes && storyboard.scenes.length > 0) {
+      selectScene(0);
+    }
+  } catch(e) {
+    alert('Failed: ' + e.message);
+  }
+  btn.disabled = false;
+  btn.textContent = 'Generate Storyboard';
+}
+
+function renderScenesList() {
+  var list = document.getElementById('scenes-list');
+  if (!storyboard || !storyboard.scenes) { list.innerHTML = ''; return; }
+  var h = '';
+  storyboard.scenes.forEach(function(s, i) {
+    var isRendered = renderedScenes[s.id];
+    h += '<div class="scene-card' + (selectedScene === i ? ' selected' : '') + '" onclick="selectScene(' + i + ')">' +
+      '<div class="scene-num">Scene ' + s.id + (isRendered ? ' ✓' : '') + '</div>' +
+      '<div class="scene-desc">' + esc(s.description || s.prompt).substring(0, 80) + '</div>' +
+      '<div class="scene-meta"><span>' + (s.cameraMotion || 'none') + '</span><span>' + (s.duration || 5) + 's</span><span>' + (s.resolution || '1080p') + '</span></div>' +
+      '</div>';
+  });
+  list.innerHTML = h;
+}
+
+function renderTimeline() {
+  var tl = document.getElementById('timeline');
+  if (!storyboard || !storyboard.scenes) { tl.innerHTML = ''; return; }
+  var h = '';
+  storyboard.scenes.forEach(function(s, i) {
+    var w = Math.max(60, (s.duration || 5) * 30);
+    var isRendered = renderedScenes[s.id];
+    h += '<div class="timeline-clip' + (isRendered ? ' rendered' : '') + (selectedScene === i ? ' selected' : '') + '" style="width:' + w + 'px" onclick="selectScene(' + i + ')">' +
+      'S' + s.id +
+      '</div>';
+  });
+  tl.innerHTML = h;
+}
+
+function selectScene(idx) {
+  selectedScene = idx;
+  renderScenesList();
+  renderTimeline();
+  renderSceneDetails();
+  // Show preview if rendered
+  var scene = storyboard.scenes[idx];
+  var preview = document.getElementById('preview-area');
+  if (renderedScenes[scene.id]) {
+    preview.innerHTML = '<video src="' + renderedScenes[scene.id] + '" controls autoplay loop style="max-width:100%;max-height:100%"></video>';
+  } else {
+    preview.innerHTML = '<div class="preview-placeholder"><svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>Scene ' + scene.id + ' — Not yet rendered</div>';
+  }
+}
+
+function renderSceneDetails() {
+  var el = document.getElementById('scene-details');
+  if (selectedScene === null || !storyboard) {
+    el.innerHTML = '<div style="padding:20px;text-align:center;color:#444;font-size:12px">Select a scene</div>';
+    return;
+  }
+  var s = storyboard.scenes[selectedScene];
+  el.innerHTML =
+    '<div class="detail-field"><label>Prompt</label><textarea id="scene-prompt" onchange="updateScene(\'prompt\',this.value)">' + esc(s.prompt || '') + '</textarea></div>' +
+    '<div class="detail-field"><label>Duration (seconds)</label><input type="number" min="2" max="10" value="' + (s.duration || 5) + '" onchange="updateScene(\'duration\',parseInt(this.value))"></div>' +
+    '<div class="detail-field"><label>Camera Motion</label><select onchange="updateScene(\'cameraMotion\',this.value)">' +
+      ['none','dolly_in','dolly_out','dolly_left','dolly_right','jib_up','jib_down','static','focus_shift'].map(function(m) {
+        return '<option value="' + m + '"' + (s.cameraMotion === m ? ' selected' : '') + '>' + m.replace('_',' ') + '</option>';
+      }).join('') +
+    '</select></div>' +
+    '<div class="detail-field"><label>Resolution</label><select onchange="updateScene(\'resolution\',this.value)">' +
+      ['540p','720p','1080p'].map(function(r) {
+        return '<option value="' + r + '"' + (s.resolution === r ? ' selected' : '') + '>' + r + '</option>';
+      }).join('') +
+    '</select></div>' +
+    '<div class="detail-field"><label>Aspect Ratio</label><select onchange="updateScene(\'aspectRatio\',this.value)">' +
+      ['16:9','9:16'].map(function(a) {
+        return '<option value="' + a + '"' + (s.aspectRatio === a ? ' selected' : '') + '>' + a + '</option>';
+      }).join('') +
+    '</select></div>' +
+    '<div class="detail-field"><label>Audio</label><select onchange="updateScene(\'audio\',this.value===\'true\')">' +
+      '<option value="true"' + (s.audio ? ' selected' : '') + '>Yes</option>' +
+      '<option value="false"' + (!s.audio ? ' selected' : '') + '>No</option>' +
+    '</select></div>';
+}
+
+function updateScene(key, val) {
+  if (selectedScene === null || !storyboard) return;
+  storyboard.scenes[selectedScene][key] = val;
+}
+
+async function generateSelectedScene() {
+  if (selectedScene === null || !storyboard || generating) return;
+  var scene = storyboard.scenes[selectedScene];
+  generating = true;
+  document.getElementById('btn-generate').disabled = true;
+  document.getElementById('btn-generate').textContent = 'Generating...';
+
+  var preview = document.getElementById('preview-area');
+  preview.innerHTML = '<div class="loading-overlay"><div class="spinner"></div><div class="loading-text">Swapping models & generating video...</div></div>';
+
+  // Poll progress
+  var progressInterval = setInterval(async function() {
+    try {
+      var r = await fetch('/api/studio/progress');
+      var d = await r.json();
+      var pct = d.progress || 0;
+      document.getElementById('progress-fill').style.width = pct + '%';
+      document.getElementById('progress-text').textContent = Math.round(pct) + '%';
+      if (d.status === 'complete' || d.status === 'error') clearInterval(progressInterval);
+    } catch(e) {}
+  }, 2000);
+
+  try {
+    var r = await fetch('/api/studio/generate-scene', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        prompt: scene.prompt,
+        duration: scene.duration || 5,
+        cameraMotion: scene.cameraMotion || 'none',
+        resolution: scene.resolution || '1080p',
+        aspectRatio: scene.aspectRatio || '16:9',
+        audio: scene.audio || false,
+      })
+    });
+    var result = await r.json();
+    clearInterval(progressInterval);
+
+    if (result.video_path) {
+      renderedScenes[scene.id] = result.video_path;
+      preview.innerHTML = '<video src="' + result.video_path + '" controls autoplay loop style="max-width:100%;max-height:100%"></video>';
+      renderScenesList();
+      renderTimeline();
+    } else {
+      preview.innerHTML = '<div class="preview-placeholder" style="color:#ef4444">Generation failed: ' + esc(result.error || JSON.stringify(result)) + '</div>';
+    }
+  } catch(e) {
+    clearInterval(progressInterval);
+    preview.innerHTML = '<div class="preview-placeholder" style="color:#ef4444">Error: ' + esc(e.message) + '</div>';
+  }
+
+  generating = false;
+  document.getElementById('btn-generate').disabled = false;
+  document.getElementById('btn-generate').textContent = 'Generate Scene';
+  document.getElementById('progress-fill').style.width = '0%';
+  document.getElementById('progress-text').textContent = '';
+}
+
+async function renderAllScenes() {
+  if (!storyboard || generating) return;
+  for (var i = 0; i < storyboard.scenes.length; i++) {
+    if (renderedScenes[storyboard.scenes[i].id]) continue;
+    selectScene(i);
+    await generateSelectedScene();
+  }
+}
+
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+</script>
+</body>
+</html>

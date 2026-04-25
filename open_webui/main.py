@@ -2597,6 +2597,16 @@ async def serve_quiz():
     raise HTTPException(status_code=404)
 
 
+@app.get('/studio')
+@app.get('/studio.html')
+async def serve_studio():
+    for base in [STATIC_DIR, FRONTEND_BUILD_DIR]:
+        studio_path = os.path.join(base, 'studio.html')
+        if os.path.isfile(studio_path):
+            return FileResponse(studio_path, media_type='text/html')
+    raise HTTPException(status_code=404)
+
+
 @app.get('/code')
 @app.get('/code.html')
 async def serve_code():
