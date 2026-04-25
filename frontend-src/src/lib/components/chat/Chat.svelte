@@ -94,7 +94,7 @@
 	import { updateFolderById } from '$lib/apis/folders';
 
 	import Banner from '../common/Banner.svelte';
-	import MessageInput from '$lib/components/chat/MessageInput.svelte';
+	import MessageInput, { _imageGenOn } from '$lib/components/chat/MessageInput.svelte';
 	import Messages from '$lib/components/chat/Messages.svelte';
 	import Navbar from '$lib/components/chat/Navbar.svelte';
 	import ChatControls from './ChatControls.svelte';
@@ -155,7 +155,8 @@
 	let generating = false;
 	let dragged = false;
 	let generationController = null;
-	let imageGenOn = false;
+	// imageGenOn is read from MessageInput's module-level _imageGenOn
+	// We check it at submit time via the reactive binding
 	let imageGenerating = false;
 
 	// Image generation handler — sends prompt to /api/images/generate
@@ -3044,12 +3045,11 @@
 											saveDraft(data, $chatId);
 										}
 									}}
-									bind:imageGenOn
 									on:submit={async (e) => {
 										clearDraft();
 										if (e.detail || files.length > 0) {
 											await tick();
-											if (imageGenOn) {
+											if (_imageGenOn) {
 												await handleImageGeneration(e.detail);
 											} else {
 												submitPrompt(e.detail.replaceAll('\n\n', '\n'));

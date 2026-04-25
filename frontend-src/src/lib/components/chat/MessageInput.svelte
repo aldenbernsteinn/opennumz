@@ -1,3 +1,8 @@
+<script context="module" lang="ts">
+	// Module-level state — persists across re-renders and component re-mounts
+	export let _imageGenOn = false;
+</script>
+
 <script lang="ts">
 	import DOMPurify from 'dompurify';
 	import { toast } from 'svelte-sonner';
@@ -135,8 +140,8 @@
 
 	let showTerminalMenu = false;
 
-	// Image generation toggle — bound from Chat.svelte, no default reset
-	export let imageGenOn;
+	// Image generation toggle — uses module-level state to survive re-renders
+	$: imageGenOn = _imageGenOn;
 
 	// Thinking toggle — matches the numz model's /think system prompt mechanism
 	let thinkingOn = false;
@@ -1858,9 +1863,9 @@
 									<button
 										id="image-gen-btn"
 										type="button"
-										class="thinking-toggle-btn{imageGenOn ? ' active' : ''}"
-										title={imageGenOn ? 'Image ON' : 'Image OFF'}
-										on:click={() => { imageGenOn = !imageGenOn; }}
+										class="thinking-toggle-btn{_imageGenOn ? ' active' : ''}"
+										title={_imageGenOn ? 'Image ON' : 'Image OFF'}
+										on:click={() => { _imageGenOn = !_imageGenOn; }}
 									>
 										Image
 									</button>
