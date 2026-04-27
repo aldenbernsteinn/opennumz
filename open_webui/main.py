@@ -3366,7 +3366,7 @@ async def ltx_proxy(request: Request, path: str):
                 return Response(
                     content=content,
                     status_code=resp.status,
-                    headers={k: v for k, v in resp.headers.items() if k.lower() not in ('content-encoding', 'transfer-encoding', 'date', 'server')},
+                    headers={k: v for k, v in resp.headers.items() if k.lower() not in ('content-encoding', 'transfer-encoding', 'content-length', 'date', 'server')},
                 )
     except Exception as e:
         return JSONResponse({'error': str(e)}, status_code=502)
