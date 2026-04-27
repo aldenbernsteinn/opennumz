@@ -4,3 +4,6 @@ open_webui/data/cache/
 open_webui/data/uploads/
 open_webui/data/vector_db/
 open_webui/data/webui.db
+open_webui/static/studio/hero-video.mp4
+open_webui/static/studio/splash/
+open_webui/static/test-ltx.html

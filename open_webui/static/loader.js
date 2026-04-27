@@ -13,11 +13,9 @@
 
 // === Sidebar buttons (Quiz + Jarvis + Mode Slider) — injected together ===
 (function() {
-  if (['/code','/jarvis','/quiz'].indexOf(window.location.pathname) !== -1) return;
+  if (['/code','/jarvis','/quiz','/studio'].indexOf(window.location.pathname) !== -1) return;
   function inject() {
     if (document.getElementById('sidebar-custom-btns')) return;
-    // On mobile, these buttons go in the open sidebar (Svelte handles it)
-    if (window.innerWidth < 768) return;
     var btn = document.getElementById('sidebar-new-chat-button');
     if (!btn || btn.classList.contains('hidden')) {
       var all = document.querySelectorAll('#sidebar-new-chat-button');
@@ -30,7 +28,7 @@
     var wrap = document.createElement('div');
     wrap.id = 'sidebar-custom-btns';
     wrap.className = 'sidebar-custom-btns';
-    wrap.innerHTML = '<a href="/studio" class="sidebar-link-btn" onclick="event.preventDefault();window.location.href=\'/studio\'">Studio</a><a href="/quiz" class="sidebar-link-btn" onclick="event.preventDefault();window.location.href=\'/quiz\'">Quiz</a><a href="/jarvis" class="sidebar-link-btn" onclick="event.preventDefault();window.location.href=\'/jarvis\'">Jarvis</a>';
+    wrap.innerHTML = '<a href="/studio" class="sidebar-link-btn" onclick="event.preventDefault();window.location.href=\'/studio\'">Studio</a><a href="/quiz" class="sidebar-link-btn" onclick="event.preventDefault();window.location.href=\'/quiz\'">Quiz</a>';
     container.parentElement.insertBefore(wrap, container.nextSibling);
   }
   new MutationObserver(inject).observe(document.documentElement, { childList: true, subtree: true });

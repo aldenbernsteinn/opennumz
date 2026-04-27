@@ -2586,6 +2586,16 @@ applications.get_swagger_ui_html = swagger_ui_html
 
 
 
+@app.get('/studio')
+@app.get('/studio/{path:path}')
+async def serve_studio(path: str = ''):
+    """Serve the LTX-Desktop web UI."""
+    studio_dir = os.path.join(STATIC_DIR, 'studio')
+    if path and os.path.isfile(os.path.join(studio_dir, path)):
+        return FileResponse(os.path.join(studio_dir, path))
+    return FileResponse(os.path.join(studio_dir, 'index.html'), media_type='text/html')
+
+
 @app.get('/quiz')
 @app.get('/quiz.html')
 async def serve_quiz():
@@ -2596,15 +2606,6 @@ async def serve_quiz():
             return FileResponse(quiz_path, media_type='text/html')
     raise HTTPException(status_code=404)
 
-
-@app.get('/studio')
-@app.get('/studio.html')
-async def serve_studio():
-    for base in [STATIC_DIR, FRONTEND_BUILD_DIR]:
-        studio_path = os.path.join(base, 'studio.html')
-        if os.path.isfile(studio_path):
-            return FileResponse(studio_path, media_type='text/html')
-    raise HTTPException(status_code=404)
 
 
 @app.get('/code')
@@ -3110,134 +3111,9 @@ async def numz_git_command(request: Request):
         return JSONResponse({'error': str(e)}, status_code=500)
 
 
-# ── Image Generation (ERNIE-Image-Turbo) ────────────────────────────────
-#
-# Pipeline: User prompt → Qwen rewrites → image server generates → image stored
-# Images stored per-chat in ~/.open-webui/images/{chat_id}/
-# Deleted when chat is deleted.
-
-import aiohttp as _aiohttp_img
+# ── Image cleanup on chat delete ─────────────────────────────────────────
 from pathlib import Path as _Path
-
-IMAGE_SERVER_URL = os.environ.get('IMAGE_SERVER_URL', 'http://127.0.0.1:8898')
 IMAGE_STORE_DIR = _Path(os.path.expanduser('~/.open-webui/images'))
-
-# The detailed caption prompt for Qwen to rewrite user prompts
-_IMAGE_REWRITE_SYSTEM = '''You are an intelligent image description assistant. Generate a detailed, informative, and objective image description for high-quality image generation.
-
-Requirements:
-- Describe what should actually be visible in the image
-- Enter directly into describing content, no meta-descriptions like "This is an image of..."
-- Clearly structured, accurate language, sufficient information
-- Total length within 1000 tokens
-
-Include: image type, subject/scene, visual details/style, entity recognition, text transcription (verbatim in quotes), content instantiation (expand abstract slots into specific drawable content).
-
-Output strictly in JSON: {"rewritten_prompt": str}'''
-
-
-@app.post('/api/images/generate')
-async def generate_image(request: Request):
-    """Generate an image. Qwen rewrites the prompt, then ERNIE generates."""
-    body = await request.json()
-    prompt = body.get('prompt', '')
-    chat_id = body.get('chat_id', '')
-    width = body.get('width', 1024)
-    height = body.get('height', 1024)
-    # image_id: if editing an existing image, pass its ID
-    source_image_id = body.get('source_image_id')
-    # new_context: if True, start a new image context (don't reference previous)
-    new_context = body.get('new_context', False)
-
-    if not prompt:
-        return JSONResponse({'error': 'No prompt'}, status_code=400)
-
-    # Step 1: Qwen rewrites the prompt
-    rewrite_input = json.dumps({'prompt': prompt, 'width': width, 'height': height})
-    try:
-        async with _aiohttp_img.ClientSession(timeout=_aiohttp_img.ClientTimeout(total=120)) as session:
-            # Use the local llama-server for prompt rewriting
-            llm_url = os.environ.get('OPENAI_API_BASE_URL', 'http://100.103.233.31:8899/v1')
-            async with session.post(
-                f'{llm_url}/chat/completions',
-                json={
-                    'model': 'numz',
-                    'messages': [
-                        {'role': 'system', 'content': _IMAGE_REWRITE_SYSTEM},
-                        {'role': 'user', 'content': rewrite_input},
-                    ],
-                    'stream': False,
-                    'chat_template_kwargs': {'enable_thinking': False},
-                },
-            ) as resp:
-                data = await resp.json()
-                rewrite_text = data.get('choices', [{}])[0].get('message', {}).get('content', '')
-    except Exception as e:
-        logging.error(f'[image] Qwen rewrite failed: {e}')
-        rewrite_text = prompt  # fallback to original
-
-    # Parse the rewritten prompt
-    enhanced_prompt = prompt
-    try:
-        # Strip markdown code blocks if present
-        clean = rewrite_text.strip()
-        if clean.startswith('```'): clean = clean.split('\n', 1)[1].rsplit('```', 1)[0]
-        parsed = json.loads(clean)
-        enhanced_prompt = parsed.get('rewritten_prompt', prompt)
-    except Exception:
-        enhanced_prompt = rewrite_text if len(rewrite_text) > len(prompt) else prompt
-
-    logging.info(f'[image] Enhanced prompt: {enhanced_prompt[:200]}...')
-
-    # Step 2: Generate image via image server (runs alongside Qwen, no swapping)
-    result = None
-    try:
-        async with _aiohttp_img.ClientSession(timeout=_aiohttp_img.ClientTimeout(total=180)) as session:
-            async with session.post(f'{IMAGE_SERVER_URL}/generate', json={
-                'prompt': enhanced_prompt, 'width': width, 'height': height,
-            }) as resp:
-                result = await resp.json()
-    except Exception as e:
-        logging.error(f'[image] Generation failed: {e}')
-        result = {'error': str(e)}
-
-    if not result or 'error' in result:
-        return JSONResponse(result or {'error': 'Unknown error'}, status_code=502)
-
-    if 'error' in result:
-        return JSONResponse(result, status_code=502)
-
-    # Step 3: Store the image
-    import base64 as _b64
-    from uuid import uuid4 as _uuid4_img
-
-    image_id = str(_uuid4_img())[:8]
-    if chat_id:
-        img_dir = IMAGE_STORE_DIR / chat_id
-        img_dir.mkdir(parents=True, exist_ok=True)
-        img_path = img_dir / f'{image_id}.png'
-        img_path.write_bytes(_b64.b64decode(result['image']))
-        logging.info(f'[image] Saved {img_path}')
-
-    return {
-        'image_id': image_id,
-        'image': result['image'],  # base64
-        'seed': result.get('seed'),
-        'elapsed_ms': result.get('elapsed_ms'),
-        'enhanced_prompt': enhanced_prompt,
-        'chat_id': chat_id,
-    }
-
-
-@app.get('/api/images/get/{chat_id}/{image_id}')
-async def get_image(chat_id: str, image_id: str):
-    """Serve a stored image."""
-    img_path = IMAGE_STORE_DIR / chat_id / f'{image_id}.png'
-    if not img_path.exists():
-        raise HTTPException(status_code=404)
-    from fastapi.responses import FileResponse as _FR
-    return _FR(str(img_path), media_type='image/png')
-
 
 # Clean up images when a chat is deleted
 _original_delete_chat = None
@@ -3264,125 +3140,168 @@ except Exception as e:
     logging.warning(f'[image] Could not patch chat delete: {e}')
 
 
-# ── Video Studio (LTX-2.3) ──────────────────────────────────────────────
-#
-# LTX-Desktop backend runs on port 8001 (separate process).
-# These endpoints proxy to it, handling model swap (stop Qwen → LTX → restart Qwen).
-
-LTX_SERVER_URL = os.environ.get('LTX_SERVER_URL', 'http://127.0.0.1:8001')
-
-# Storyboard system prompt for Qwen
-_STORYBOARD_SYSTEM = '''You are a video storyboard assistant. Given a story idea, output a structured storyboard in JSON.
-
-Output format:
-{
-  "title": "Story title",
-  "scenes": [
-    {
-      "id": 1,
-      "description": "Brief scene description",
-      "prompt": "Detailed cinematic video generation prompt (describe visuals, lighting, camera, action)",
-      "duration": 5,
-      "cameraMotion": "dolly_in",
-      "resolution": "1080p",
-      "aspectRatio": "16:9",
-      "audio": true
-    }
-  ]
-}
-
-Camera motion options: none, dolly_in, dolly_out, dolly_left, dolly_right, jib_up, jib_down, static, focus_shift.
-Duration range: 2-10 seconds per scene.
-Write prompts that are visually descriptive and cinematic.
-Output ONLY valid JSON, no other text.'''
+# ── LTX Studio: server-side project storage ─────────────────────────────
+_LTX_PROJECTS_FILE = os.path.expanduser('~/.numz/ltx-data/projects.json')
 
 
-@app.post('/api/studio/storyboard')
-async def generate_storyboard(request: Request):
-    """Qwen generates a storyboard from a story idea."""
-    body = await request.json()
-    idea = body.get('idea', '')
-    if not idea:
-        return JSONResponse({'error': 'No story idea'}, status_code=400)
-
+@app.get('/ltx-api/projects')
+async def get_ltx_projects():
+    """Return all saved projects."""
     try:
-        llm_url = os.environ.get('OPENAI_API_BASE_URL', 'http://100.103.233.31:8899/v1')
-        async with _aiohttp_img.ClientSession(timeout=_aiohttp_img.ClientTimeout(total=120)) as session:
-            async with session.post(f'{llm_url}/chat/completions', json={
-                'model': 'numz',
-                'messages': [
-                    {'role': 'system', 'content': _STORYBOARD_SYSTEM},
-                    {'role': 'user', 'content': idea},
-                ],
-                'stream': False,
-                'chat_template_kwargs': {'enable_thinking': False},
-            }) as resp:
-                data = await resp.json()
-                text = data.get('choices', [{}])[0].get('message', {}).get('content', '')
-
-        # Parse JSON from response
-        clean = text.strip()
-        if clean.startswith('```'): clean = clean.split('\n', 1)[1].rsplit('```', 1)[0]
-        storyboard = json.loads(clean)
-        return storyboard
-
+        if os.path.isfile(_LTX_PROJECTS_FILE):
+            with open(_LTX_PROJECTS_FILE) as f:
+                return json.load(f)
     except Exception as e:
-        logging.error(f'[studio] Storyboard generation failed: {e}')
+        logging.warning(f'[studio] Failed to load projects: {e}')
+    return []
+
+
+@app.put('/ltx-api/projects')
+async def save_ltx_projects(request: Request):
+    """Save all projects (full replace)."""
+    data = await request.json()
+    try:
+        os.makedirs(os.path.dirname(_LTX_PROJECTS_FILE), exist_ok=True)
+        with open(_LTX_PROJECTS_FILE, 'w') as f:
+            json.dump(data, f)
+        return {'status': 'ok'}
+    except Exception as e:
         return JSONResponse({'error': str(e)}, status_code=500)
 
 
-@app.post('/api/studio/generate-scene')
-async def generate_scene(request: Request):
-    """Generate a single video scene via LTX backend (with model swap)."""
-    body = await request.json()
+@app.get('/ltx-api/gallery')
+async def ltx_gallery():
+    """List all generated videos from the outputs directory."""
+    outputs_dir = os.path.expanduser('~/.numz/ltx-data/outputs')
+    videos = []
+    if os.path.isdir(outputs_dir):
+        for f in sorted(os.listdir(outputs_dir), reverse=True):
+            if f.endswith('.mp4'):
+                fpath = os.path.join(outputs_dir, f)
+                stat = os.stat(fpath)
+                videos.append({
+                    'filename': f,
+                    'url': f'/ltx-files/outputs/{f}',
+                    'size': stat.st_size,
+                    'created': stat.st_mtime,
+                })
+    return videos
 
-    # Step 1: Stop Qwen to free VRAM for LTX
-    logging.info('[studio] Stopping numz-server for LTX generation...')
-    _sp.run(['systemctl', '--user', 'stop', 'numz-server'], capture_output=True)
-    await _aio.sleep(3)
 
+# ── LTX API proxy ───────────────────────────────────────────────────────
+# Proxies /ltx-api/* to the LTX backend on port 8001.
+
+_LTX_BACKEND = 'http://127.0.0.1:8001'
+_LTX_OUTPUTS_DIR = os.path.expanduser('~/.numz/ltx-data/outputs')
+_LTX_DATA_DIR = os.path.expanduser('~/.numz/ltx-data')
+
+
+@app.get('/ltx-files/{filepath:path}')
+async def serve_ltx_file(filepath: str):
+    """Serve generated video/image files from LTX data directory."""
+    import pathlib
+    resolved = pathlib.Path(os.path.join(_LTX_DATA_DIR, filepath)).resolve()
+    allowed = pathlib.Path(_LTX_DATA_DIR).resolve()
+    if not str(resolved).startswith(str(allowed)):
+        return JSONResponse({'error': 'Access denied'}, status_code=403)
+    if not resolved.is_file():
+        return JSONResponse({'error': 'Not found'}, status_code=404)
+    suffix = resolved.suffix.lower()
+    media_types = {'.mp4': 'video/mp4', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webm': 'video/webm'}
+    return FileResponse(str(resolved), media_type=media_types.get(suffix, 'application/octet-stream'))
+
+
+def _rewrite_ltx_paths(content: bytes) -> bytes:
+    """Rewrite local file paths in LTX API responses to servable URLs."""
     try:
-        # Step 2: Start LTX server if not running
-        _sp.run(['systemctl', '--user', 'start', 'ltx-server'], capture_output=True)
-
-        # Wait for LTX to be ready
-        for _ in range(60):
-            await _aio.sleep(2)
-            try:
-                async with _aiohttp_img.ClientSession(timeout=_aiohttp_img.ClientTimeout(total=3)) as s:
-                    async with s.get(f'{LTX_SERVER_URL}/api/health') as r:
-                        if r.status == 200:
-                            break
-            except Exception:
-                pass
-
-        # Step 3: Generate video
-        async with _aiohttp_img.ClientSession(timeout=_aiohttp_img.ClientTimeout(total=600)) as session:
-            async with session.post(f'{LTX_SERVER_URL}/api/generate', json=body) as resp:
-                result = await resp.json()
-
-        return result
-
-    except Exception as e:
-        logging.error(f'[studio] Scene generation failed: {e}')
-        return JSONResponse({'error': str(e)}, status_code=502)
-    finally:
-        # Step 4: Stop LTX, restart Qwen
-        _sp.run(['systemctl', '--user', 'stop', 'ltx-server'], capture_output=True)
-        await _aio.sleep(2)
-        logging.info('[studio] Restarting numz-server...')
-        _sp.run(['systemctl', '--user', 'start', 'numz-server'], capture_output=True)
-
-
-@app.get('/api/studio/progress')
-async def scene_progress():
-    """Get LTX generation progress."""
-    try:
-        async with _aiohttp_img.ClientSession(timeout=_aiohttp_img.ClientTimeout(total=5)) as session:
-            async with session.get(f'{LTX_SERVER_URL}/api/generation/progress') as resp:
-                return await resp.json()
+        text = content.decode('utf-8')
+        # Replace absolute paths to outputs with our serving URL
+        text = text.replace(_LTX_DATA_DIR, '/ltx-files')
+        return text.encode('utf-8')
     except Exception:
-        return {'status': 'idle'}
+        return content
+
+
+_ltx_generate_result: dict | None = None
+_ltx_generating = False
+
+
+@app.post('/ltx-api/api/generate')
+async def ltx_generate(request: Request):
+    """Start video generation in background. Returns immediately.
+    Frontend polls /api/generation/progress then /api/generate/result."""
+    global _ltx_generate_result, _ltx_generating
+    import aiohttp as _aio_ltx
+
+    _sp.run(['systemctl', '--user', 'start', 'ltx-server'], capture_output=True)
+
+    body = await request.body()
+    _ltx_generate_result = None
+    _ltx_generating = True
+
+    async def _run():
+        global _ltx_generate_result, _ltx_generating
+        try:
+            async with _aio_ltx.ClientSession(timeout=_aio_ltx.ClientTimeout(total=600)) as s:
+                async with s.post(f'{_LTX_BACKEND}/api/generate', data=body,
+                                  headers={'Content-Type': 'application/json'}) as r:
+                    content = await r.read()
+                    content = _rewrite_ltx_paths(content)
+                    _ltx_generate_result = json.loads(content)
+        except Exception as e:
+            _ltx_generate_result = {'status': 'error', 'error': str(e)}
+        finally:
+            _ltx_generating = False
+
+    _aio.create_task(_run())
+    return JSONResponse({'status': 'started'})
+
+
+@app.get('/ltx-api/api/generate/result')
+async def ltx_generate_result():
+    """Get the result of the last generation."""
+    if _ltx_generating:
+        return JSONResponse({'status': 'generating'})
+    if _ltx_generate_result is not None:
+        return JSONResponse(_ltx_generate_result)
+    return JSONResponse({'status': 'idle'})
+
+
+@app.api_route('/ltx-api/{path:path}', methods=['GET', 'POST', 'PUT', 'DELETE'])
+async def ltx_proxy(request: Request, path: str):
+    """Reverse proxy to LTX-Desktop backend."""
+    import aiohttp as _aio_ltx
+
+    _sp.run(['systemctl', '--user', 'start', 'ltx-server'], capture_output=True)
+
+    target = f'{_LTX_BACKEND}/{path}'
+    if request.url.query:
+        target += f'?{request.url.query}'
+
+    body = await request.body() if request.method in ('POST', 'PUT') else None
+    headers = {k: v for k, v in request.headers.items() if k.lower() not in ('host', 'content-length')}
+
+    try:
+        async with _aio_ltx.ClientSession(timeout=_aio_ltx.ClientTimeout(total=600)) as session:
+            async with session.request(request.method, target, data=body, headers=headers) as resp:
+                content = await resp.read()
+                ct = resp.headers.get('content-type', '')
+                if 'json' in ct or 'text' in ct:
+                    content = _rewrite_ltx_paths(content)
+                return Response(
+                    content=content,
+                    status_code=resp.status,
+                    headers={k: v for k, v in resp.headers.items() if k.lower() not in ('content-encoding', 'transfer-encoding', 'date', 'server')},
+                )
+    except Exception as e:
+        return JSONResponse({'error': str(e)}, status_code=502)
+
+
+@app.post('/api/numz/sleep')
+async def numz_sleep():
+    """Tell llama-server to free VRAM by stopping it. It auto-starts on next request."""
+    _sp.run(['systemctl', '--user', 'stop', 'numz-server'], capture_output=True)
+    return JSONResponse({'status': 'ok'})
 
 
 @app.post('/api/numz/mkdir')
