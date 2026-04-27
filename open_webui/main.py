@@ -3371,20 +3371,42 @@ async def storyboard_chat_stream(request: Request):
     body = await request.json()
     messages = body.get('messages', [])
     style_desc = body.get('style_description', '')
+    spoken_lang = body.get('spoken_language', '')
+    subtitle_lang = body.get('subtitle_language', '')
     characters = body.get('characters', [])
     script = body.get('script', '')
     storyboard_json = body.get('storyboard_json')
     user_prompt_append = body.get('user_prompt_append', '')
     enable_thinking = body.get('enable_thinking', False)
 
-    # Build system prompt with project context (mirrors LTX backend logic)
+    # Build system prompt with project context
     system_content = STORYBOARD_SYSTEM_PROMPT
+
+    # Language rules
+    if spoken_lang and spoken_lang != 'none':
+        system_content += (
+            f"\n\n# Language\n"
+            f"All dialogue in shot prompts and subtitle fields MUST be written in {spoken_lang}. "
+            f"Characters speak {spoken_lang}. Audio descriptions reference {spoken_lang} speech."
+        )
+    elif spoken_lang == 'none':
+        system_content += (
+            "\n\n# Language\n"
+            "No dialogue. All shots are b-roll or have ambient audio only. "
+            "Never write dialogue or subtitles."
+        )
+
     if user_prompt_append.strip():
         system_content += f"\n\n## User Notes\n{user_prompt_append}\n"
 
     status_parts = ["## Current Project State"]
     if style_desc.strip():
         status_parts.append(f"\n### Visual Style: {style_desc}")
+    if spoken_lang:
+        lang_display = 'None (no dialogue)' if spoken_lang == 'none' else spoken_lang
+        status_parts.append(f"\n### Spoken Language: {lang_display}")
+    if subtitle_lang:
+        status_parts.append(f"\n### Subtitles: {subtitle_lang}")
     else:
         status_parts.append("\n### Visual Style: NOT SET")
 
