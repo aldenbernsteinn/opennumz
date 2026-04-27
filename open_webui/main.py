@@ -3310,6 +3310,18 @@ async def ltx_proxy(request: Request, path: str):
     # LLM paths need llama-server running (it may have been stopped for GPU work)
     if path in _LTX_LLM_PATHS and request.method == 'POST':
         _sp.run(['systemctl', '--user', 'start', 'numz-server'], capture_output=True)
+        # Wait for llama-server to be reachable (model loading can take seconds)
+        import aiohttp as _aio_numz
+        for _attempt in range(30):
+            try:
+                async with _aio_numz.ClientSession(timeout=_aio_numz.ClientTimeout(total=2)) as _ns:
+                    async with _ns.get('http://100.103.233.31:8899/v1/models') as _nr:
+                        if _nr.status == 200:
+                            break
+            except Exception:
+                pass
+            import asyncio as _aio_sleep
+            await _aio_sleep.sleep(2)
 
     # Free VRAM from llama-server once per generation batch (30s debounce)
     if path in _LTX_GPU_PATHS and request.method == 'POST' and (_time.time() - _ltx_vram_freed_at) > 30:
