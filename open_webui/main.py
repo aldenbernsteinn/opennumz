@@ -3256,8 +3256,12 @@ async def ltx_generate(request: Request):
     global _ltx_generate_result, _ltx_generating
     import aiohttp as _aio_ltx
 
-    # Free VRAM from llama-server before video generation
-    _sp.run(['systemctl', '--user', 'stop', 'numz-server'], capture_output=True)
+    global _ltx_vram_freed_at
+    import time as _time
+    # Free VRAM from llama-server before video generation (30s debounce)
+    if (_time.time() - _ltx_vram_freed_at) > 30:
+        _sp.run(['systemctl', '--user', 'stop', 'numz-server'], capture_output=True)
+        _ltx_vram_freed_at = _time.time()
     _sp.run(['systemctl', '--user', 'start', 'ltx-server'], capture_output=True)
 
     body = await request.body()
@@ -3293,17 +3297,37 @@ async def ltx_generate_result():
 
 
 _LTX_GPU_PATHS = {'api/generate', 'api/generate-image', 'api/ic-lora/generate'}
+_ltx_vram_freed_at = 0.0  # timestamp when we last freed VRAM
 
 @app.api_route('/ltx-api/{path:path}', methods=['GET', 'POST', 'PUT', 'DELETE'])
 async def ltx_proxy(request: Request, path: str):
     """Reverse proxy to LTX-Desktop backend."""
     import aiohttp as _aio_ltx
+    global _ltx_vram_ready
 
-    # Free VRAM from llama-server before GPU-heavy LTX operations
-    if path in _LTX_GPU_PATHS and request.method == 'POST':
+    # Free VRAM from llama-server once per generation batch (30s debounce)
+    import time as _time
+    global _ltx_vram_freed_at
+    if path in _LTX_GPU_PATHS and request.method == 'POST' and (_time.time() - _ltx_vram_freed_at) > 30:
         _sp.run(['systemctl', '--user', 'stop', 'numz-server'], capture_output=True)
+        _ltx_vram_freed_at = _time.time()
 
+    # Ensure LTX server is running (idempotent — no-op if already up)
     _sp.run(['systemctl', '--user', 'start', 'ltx-server'], capture_output=True)
+
+    # For GPU operations, wait until LTX server is reachable
+    if path in _LTX_GPU_PATHS and request.method == 'POST':
+        import aiohttp as _aio_wait
+        for _attempt in range(10):
+            try:
+                async with _aio_wait.ClientSession(timeout=_aio_wait.ClientTimeout(total=2)) as _ws:
+                    async with _ws.get(f'{_LTX_BACKEND}/api/health') as _wr:
+                        if _wr.status == 200:
+                            break
+            except Exception:
+                pass
+            import asyncio as _aio_sleep
+            await _aio_sleep.sleep(1)
 
     target = f'{_LTX_BACKEND}/{path}'
     if request.url.query:
