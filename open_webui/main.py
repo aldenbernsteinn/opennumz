@@ -3298,6 +3298,130 @@ async def ltx_generate_result():
 
 _LTX_GPU_PATHS = {'api/generate', 'api/generate-image', 'api/ic-lora/generate'}
 _LTX_LLM_PATHS = {'api/storyboard/chat', 'api/storyboard/generate-style-samples', 'api/storyboard/generate-character-refs'}
+
+
+# ── Storyboard streaming chat — bypasses LTX backend, streams directly from llama-server ──
+
+# Import the system prompt and tools from LTX backend (they're just static data)
+import sys as _sys
+_sys.path.insert(0, '/home/aldenb/LTX-Desktop/backend')
+try:
+    from handlers.storyboard_handler import STORYBOARD_SYSTEM_PROMPT, STORYBOARD_TOOLS
+except ImportError:
+    STORYBOARD_SYSTEM_PROMPT = "You are a storyboard agent."
+    STORYBOARD_TOOLS = []
+
+_NUMZ_ENDPOINT = 'http://100.103.233.31:8899/v1/chat/completions'
+
+
+@app.post('/ltx-api/api/storyboard/chat-stream')
+async def storyboard_chat_stream(request: Request):
+    """Stream storyboard chat directly from llama-server. SSE format."""
+    import aiohttp as _aio_stream
+
+    body = await request.json()
+    messages = body.get('messages', [])
+    style_desc = body.get('style_description', '')
+    characters = body.get('characters', [])
+    script = body.get('script', '')
+    storyboard_json = body.get('storyboard_json')
+    user_prompt_append = body.get('user_prompt_append', '')
+    enable_thinking = body.get('enable_thinking', False)
+
+    # Build system prompt with project context (mirrors LTX backend logic)
+    system_content = STORYBOARD_SYSTEM_PROMPT
+    if user_prompt_append.strip():
+        system_content += f"\n\n## User Notes\n{user_prompt_append}\n"
+
+    status_parts = ["## Current Project State"]
+    if style_desc.strip():
+        status_parts.append(f"\n### Visual Style: {style_desc}")
+    else:
+        status_parts.append("\n### Visual Style: NOT SET")
+
+    if characters:
+        status_parts.append(f"\n### Characters ({len(characters)} defined)")
+        for char in characters:
+            name = char.get('name', 'Unknown')
+            base_desc = char.get('baseDescription', char.get('description', ''))
+            looks = char.get('looks', [])
+            if looks:
+                active_id = char.get('activeLookId', '')
+                look_names = []
+                for lk in looks:
+                    label = lk.get('label', '?')
+                    ref_count = len(lk.get('referenceImagePaths', []))
+                    active_mark = ' [ACTIVE]' if lk.get('id') == active_id else ''
+                    look_names.append(f"{label} ({ref_count} refs){active_mark}")
+                status_parts.append(f"- **{name}**: {base_desc} — Looks: {', '.join(look_names)}")
+            else:
+                status_parts.append(f"- **{name}**: {base_desc}")
+    else:
+        status_parts.append("\n### Characters: NONE")
+
+    if script.strip():
+        status_parts.append(f"\n### Script\n{script}")
+    if storyboard_json:
+        status_parts.append(f"\n### Storyboard\n```json\n{storyboard_json}\n```")
+    else:
+        status_parts.append("\n### Storyboard: EMPTY")
+
+    openai_messages = [
+        {'role': 'system', 'content': system_content},
+        {'role': 'system', 'content': '\n'.join(status_parts)},
+    ]
+    for msg in messages:
+        openai_messages.append({'role': msg.get('role', 'user'), 'content': msg.get('content', '')})
+
+    payload = {
+        'model': 'qwen',
+        'messages': openai_messages,
+        'temperature': 0.7,
+        'stream': True,
+        'tools': STORYBOARD_TOOLS,
+        'enable_thinking': enable_thinking,
+        'chat_template_kwargs': {'enable_thinking': enable_thinking},
+    }
+
+    # Ensure llama-server is running
+    _sp.run(['systemctl', '--user', 'start', 'numz-server'], capture_output=True)
+
+    async def stream_generator():
+        import aiohttp as _aio_sg
+        for _attempt in range(30):
+            try:
+                async with _aio_sg.ClientSession(timeout=_aio_sg.ClientTimeout(total=2)) as _ns:
+                    async with _ns.get('http://100.103.233.31:8899/v1/models') as _nr:
+                        if _nr.status == 200:
+                            break
+            except Exception:
+                pass
+            import asyncio
+            await asyncio.sleep(2)
+
+        try:
+            async with _aio_sg.ClientSession(timeout=_aio_sg.ClientTimeout(total=None)) as session:
+                async with session.post(_NUMZ_ENDPOINT, json=payload) as resp:
+                    if resp.status != 200:
+                        error_text = await resp.text()
+                        yield f'data: {json.dumps({"error": error_text})}\n\n'
+                        return
+
+                    async for line in resp.content:
+                        decoded = line.decode('utf-8', errors='replace').strip()
+                        if decoded:
+                            yield decoded + '\n'
+                        if decoded == 'data: [DONE]':
+                            return
+        except Exception as e:
+            yield f'data: {json.dumps({"error": str(e)})}\n\n'
+
+    from starlette.responses import StreamingResponse as _SSEResponse
+    return _SSEResponse(
+        stream_generator(),
+        media_type='text/event-stream',
+        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
+    )
 _ltx_vram_freed_at = 0.0  # timestamp when we last freed VRAM
 
 @app.api_route('/ltx-api/{path:path}', methods=['GET', 'POST', 'PUT', 'DELETE'])
