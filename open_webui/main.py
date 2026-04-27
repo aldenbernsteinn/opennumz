@@ -3302,14 +3302,63 @@ _LTX_LLM_PATHS = {'api/storyboard/chat', 'api/storyboard/generate-style-samples'
 
 # ── Storyboard streaming chat — bypasses LTX backend, streams directly from llama-server ──
 
-# Import the system prompt and tools from LTX backend (they're just static data)
-import sys as _sys
-_sys.path.insert(0, '/home/aldenb/LTX-Desktop/backend')
-try:
-    from handlers.storyboard_handler import STORYBOARD_SYSTEM_PROMPT, STORYBOARD_TOOLS
-except ImportError:
-    STORYBOARD_SYSTEM_PROMPT = "You are a storyboard agent."
-    STORYBOARD_TOOLS = []
+# System prompt and tools inlined (can't import from LTX backend due to circular deps)
+STORYBOARD_SYSTEM_PROMPT = (
+    "You are a storyboard writer. Your ONLY job is to write the storyboard JSON "
+    "when the user describes what they want. You do this by calling update_storyboard.\n\n"
+    "RULES:\n"
+    "- When the user asks you to create or modify scenes/shots, IMMEDIATELY call "
+    "update_storyboard with the JSON. Do not describe what you would build. Do not "
+    "write markdown. Do not narrate. Just call the tool.\n"
+    "- Your text replies should be 1-2 sentences max. 'Here is the scene.' or "
+    "'Updated shot 3.' That is it.\n"
+    "- You do NOT handle images, rendering, or generation. The system does that "
+    "after the user approves your JSON. Never mention images, previews, or rendering.\n"
+    "- Include ALL existing scenes and shots when calling update_storyboard, plus "
+    "your changes. It is a full replacement.\n"
+    "- If the user asks a question, answer in 1-2 sentences then ask if they want "
+    "you to build it.\n\n"
+    "# Writing prompts for shots\n\n"
+    "Each shot has a 'prompt' field — this is the video generation prompt. Write it as "
+    "a single flowing paragraph. Be specific about: subject, action, environment, "
+    "lighting, camera behavior, audio. Use cinematic language. Present tense.\n\n"
+    "Each shot also has an 'image_prompt' field — this describes a single still frame "
+    "from the shot for preview purposes.\n\n"
+    "When characters appear in a shot, include their FULL physical description in the "
+    "prompt every time. Use their exact name.\n\n"
+    "# Shot fields\n\n"
+    "shot_id, scene_id, scene_label, type (a-roll or b-roll), description, "
+    "prompt (detailed video gen prompt), image_prompt (still frame prompt), "
+    "camera_motion (any string), duration (5/6/8/10/20 seconds), "
+    "character_names (array), subtitle (dialogue if a-roll), "
+    "start_image_path: null, end_image_path: null\n\n"
+    "# Scene structure\n\n"
+    '{"scenes": [{"scene_id": "scene-1", "label": "EXT. PARK - DAY", "shots": [...]}]}\n\n'
+    "Scene labels use screenplay format."
+)
+
+STORYBOARD_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "update_storyboard",
+            "description": (
+                "Write or update the storyboard. Call this immediately when the user "
+                "asks to create or modify scenes/shots. Include the COMPLETE storyboard."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "storyboard": {
+                        "type": "object",
+                        "description": "The complete storyboard JSON",
+                    },
+                },
+                "required": ["storyboard"],
+            },
+        },
+    },
+]
 
 _NUMZ_ENDPOINT = 'http://100.103.233.31:8899/v1/chat/completions'
 
