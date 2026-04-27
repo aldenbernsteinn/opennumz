@@ -3297,17 +3297,21 @@ async def ltx_generate_result():
 
 
 _LTX_GPU_PATHS = {'api/generate', 'api/generate-image', 'api/ic-lora/generate'}
+_LTX_LLM_PATHS = {'api/storyboard/chat', 'api/storyboard/generate-style-samples', 'api/storyboard/generate-character-refs'}
 _ltx_vram_freed_at = 0.0  # timestamp when we last freed VRAM
 
 @app.api_route('/ltx-api/{path:path}', methods=['GET', 'POST', 'PUT', 'DELETE'])
 async def ltx_proxy(request: Request, path: str):
     """Reverse proxy to LTX-Desktop backend."""
     import aiohttp as _aio_ltx
-    global _ltx_vram_ready
-
-    # Free VRAM from llama-server once per generation batch (30s debounce)
     import time as _time
     global _ltx_vram_freed_at
+
+    # LLM paths need llama-server running (it may have been stopped for GPU work)
+    if path in _LTX_LLM_PATHS and request.method == 'POST':
+        _sp.run(['systemctl', '--user', 'start', 'numz-server'], capture_output=True)
+
+    # Free VRAM from llama-server once per generation batch (30s debounce)
     if path in _LTX_GPU_PATHS and request.method == 'POST' and (_time.time() - _ltx_vram_freed_at) > 30:
         _sp.run(['systemctl', '--user', 'stop', 'numz-server'], capture_output=True)
         _ltx_vram_freed_at = _time.time()
