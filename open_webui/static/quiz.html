@@ -127,6 +127,33 @@ body{font-family:-apple-system,system-ui,sans-serif;background:#1a1a1a;color:#ce
 .quiz-item .qi-progress{margin-top:12px}
 .quiz-item .qi-progress-bar{height:3px;background:#1a1a1a;border-radius:2px;overflow:hidden}
 .quiz-item .qi-progress-fill{height:100%;background:#4d4d4d;border-radius:2px}
+
+/* === Review two-column layout === */
+.review-layout{display:flex;gap:24px;align-items:flex-start}
+.review-content{flex:1;min-width:0}
+.review-chat-wrap{width:340px;flex-shrink:0;position:sticky;top:20px;max-height:calc(100vh - 40px)}
+.review-chat{background:#111;border:1px solid #1a1a1a;border-radius:12px;display:flex;flex-direction:column;height:calc(100vh - 120px);max-height:700px}
+.review-chat-header{padding:14px 16px;font-size:14px;font-weight:600;color:#cecece;border-bottom:1px solid #1a1a1a}
+.review-msgs{flex:1;overflow-y:auto;padding:12px 16px;font-size:14px;line-height:1.6}
+.review-msgs .msg{margin-bottom:10px;padding:10px 14px;border-radius:10px}
+.review-msgs .msg-user{background:#1a1a1a;text-align:right;color:#cecece}
+.review-msgs .msg-ai{background:#141414;color:#9b9b9b}
+.review-msgs .msg-ai strong{color:#cecece}
+.review-msgs .msg-ai em{color:#b4b4b4}
+.review-msgs .msg-ai ol,.review-msgs .msg-ai ul{margin:6px 0 6px 18px}
+.review-msgs .msg-ai h1,.review-msgs .msg-ai h2,.review-msgs .msg-ai h3{color:#eee;margin:12px 0 6px;font-size:15px}
+.review-msgs .msg-ai p{margin:6px 0}
+.review-msgs .msg-ai code{background:#1a1a1a;padding:1px 5px;border-radius:4px;font-size:13px}
+.review-msgs .msg-ai li{margin:4px 0}
+.review-input-row{display:flex;gap:8px;padding:12px;border-top:1px solid #1a1a1a}
+.review-input-row input{flex:1;padding:10px 14px;background:#161616;border:1px solid #1a1a1a;border-radius:10px;color:#cecece;font-size:14px;font-family:inherit;outline:none}
+.review-input-row input:focus{border-color:#333}
+.review-input-row .send{padding:10px 16px;background:#1a1a1a;color:#fff;border:none;border-radius:10px;font-size:14px;cursor:pointer}
+@media(max-width:800px){
+  .review-layout{flex-direction:column}
+  .review-chat-wrap{width:100%;position:static;max-height:none}
+  .review-chat{height:400px;max-height:400px}
+}
 </style>
 </head>
 <body>
@@ -148,7 +175,7 @@ body{font-family:-apple-system,system-ui,sans-serif;background:#1a1a1a;color:#ce
     <div class="bar">
       <a href="#" id="back-to-selector">&larr; Quizzes</a>
       <h1 id="quiz-title"></h1>
-      <button onclick="toggleOverview()" id="overview-btn" style="padding:4px 12px;border-radius:8px;border:1px solid #333;background:none;color:#9a9a9a;font-size:13px;cursor:pointer;font-family:inherit">Overview</button>
+      <button onclick="toggleOverview()" id="overview-btn" style="padding:4px 12px;border-radius:8px;border:1px solid #333;background:none;color:#9a9a9a;font-size:13px;cursor:pointer;font-family:inherit">Review</button>
       <span class="prog" id="prog">0/0</span>
     </div>
     <div class="progress-wrap">
@@ -722,13 +749,119 @@ function renderMd(s){
 }
 
 var _overviewVisible=false;
+var reviewChatHistory=[];
+var reviewChatBusy=false;
+var reviewChatAbort=null;
+
 function toggleOverview(){
   _overviewVisible=!_overviewVisible;
   if(_overviewVisible){
-    document.getElementById('main').innerHTML=OVERVIEW_HTML;
+    // Widen app for two-column layout
+    document.querySelector('.app').style.maxWidth='1200px';
+    // Build two-column: textbook left, chat right
+    var h='<div class="review-layout">';
+    h+='<div class="review-content">'+OVERVIEW_HTML+'</div>';
+    h+='<div class="review-chat-wrap">';
+    h+='<div class="review-chat">';
+    h+='<div class="review-chat-header">Study Chat <span style="color:#4d4d4d;font-size:12px">\u2014 has all L1\u20138 lecture PDFs</span></div>';
+    h+='<div class="review-msgs" id="review-msgs"></div>';
+    h+='<div class="review-input-row"><input id="review-chatinput" placeholder="Ask anything about L1\u20138..." onkeydown="if(event.key===\'Enter\')sendReviewChat()"><button class="send" id="review-sendbtn" onclick="sendReviewChat()">Ask</button></div>';
+    h+='</div>';
+    h+='</div>';
+    h+='</div>';
+    document.getElementById('main').innerHTML=h;
+    reviewChatHistory=[];
   } else {
+    // Reset chat and restore narrow layout
+    reviewChatHistory=[];
+    if(reviewChatAbort){reviewChatAbort.abort();reviewChatAbort=null}
+    reviewChatBusy=false;
+    document.querySelector('.app').style.maxWidth='700px';
     render();
   }
+}
+
+async function sendReviewChat(){
+  if(reviewChatBusy){
+    if(reviewChatAbort){reviewChatAbort.abort();reviewChatAbort=null}
+    reviewChatBusy=false;
+    var btn=document.getElementById('review-sendbtn');
+    if(btn){btn.textContent='Ask';btn.style.background=''}
+    return;
+  }
+  var input=document.getElementById('review-chatinput');
+  if(!input)return;
+  var text=input.value.trim();
+  if(!text)return;
+  input.value='';
+  var msgs=document.getElementById('review-msgs');
+  msgs.innerHTML+='<div class="msg msg-user">'+esc(text)+'</div>';
+  reviewChatHistory.push({role:'user',content:text});
+
+  reviewChatBusy=true;
+  var btn=document.getElementById('review-sendbtn');
+  if(btn){btn.textContent='Stop';btn.style.background='#333'}
+  var loadingDiv=document.createElement('div');
+  loadingDiv.className='msg msg-ai';
+  loadingDiv.innerHTML='<span class="msg-thinking">Thinking...</span>';
+  msgs.appendChild(loadingDiv);
+  msgs.scrollTop=msgs.scrollHeight;
+
+  var sysMsg='You are a chill study buddy for COGS 10 (Cognitive Consequences of Technology). You have access to ALL lecture PDFs from L1 through L8. The student is reading the review textbook and may ask about any concept from the entire course.\n\nRules:\n- Explain like they are hearing this for the first time. Break down every term with a simple real-world example.\n- Use short sentences, analogies, casual language.\n- Reference specific details from the lecture documents.\n- If they ask about something from lecture, give the actual answer from the material.\n- Stay on course topics.\n- Brief greetings are fine.';
+
+  reviewChatAbort=new AbortController();
+  var headers={'Content-Type':'application/json'};
+  if(authToken)headers['Authorization']='Bearer '+authToken;
+
+  try{
+    var res=await fetch(API_URL,{
+      method:'POST',
+      headers:headers,
+      signal:reviewChatAbort.signal,
+      body:JSON.stringify({model:'numz',messages:[{role:'system',content:sysMsg}].concat(reviewChatHistory),stream:true,chat_template_kwargs:{enable_thinking:false},metadata:{files:quizFiles}})
+    });
+
+    loadingDiv.innerHTML='';
+    var fullText='';
+    var reader=res.body.getReader();
+    var decoder=new TextDecoder();
+    var buffer='';
+
+    while(true){
+      var chunk=await reader.read();
+      if(chunk.done)break;
+      buffer+=decoder.decode(chunk.value,{stream:true});
+      var lines=buffer.split('\n');
+      buffer=lines.pop();
+      for(var i=0;i<lines.length;i++){
+        if(!lines[i].startsWith('data: '))continue;
+        var data=lines[i].slice(6);
+        if(data==='[DONE]')break;
+        try{
+          var parsed=JSON.parse(data);
+          var delta=parsed.choices&&parsed.choices[0]&&parsed.choices[0].delta&&parsed.choices[0].delta.content;
+          if(delta){
+            fullText+=delta;
+            loadingDiv.innerHTML=renderMd(fullText);
+            msgs.scrollTop=msgs.scrollHeight;
+          }
+        }catch(e){}
+      }
+    }
+    if(!fullText)loadingDiv.innerHTML='<span style="color:#666">No response</span>';
+    if(fullText)reviewChatHistory.push({role:'assistant',content:fullText});
+  }catch(e){
+    if(e.name==='AbortError'){
+      if(!loadingDiv.innerHTML)loadingDiv.innerHTML='<span style="color:#666">Stopped</span>';
+    } else {
+      loadingDiv.innerHTML='<span style="color:#ef4444">Error</span>';
+    }
+  }
+
+  reviewChatBusy=false;
+  reviewChatAbort=null;
+  if(btn){btn.textContent='Ask';btn.style.background=''}
+  msgs.scrollTop=msgs.scrollHeight;
 }
 
 // Migrate old storage key to new format

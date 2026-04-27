@@ -1,8 +1,8 @@
 var QUIZZES = [
   {
     id: 'COGS10-midterm1',
-    name: 'COGS 10 — Midterm 1',
-    description: 'Cognitive Science midterm review',
+    name: 'COGS 101C',
+    description: 'Language & cognition review',
     questionCount: 43
   },
   {

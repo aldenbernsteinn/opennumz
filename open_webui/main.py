@@ -2603,7 +2603,9 @@ async def serve_quiz():
     for base in [STATIC_DIR, FRONTEND_BUILD_DIR]:
         quiz_path = os.path.join(base, 'quiz.html')
         if os.path.isfile(quiz_path):
-            return FileResponse(quiz_path, media_type='text/html')
+            response = FileResponse(quiz_path, media_type='text/html')
+            response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+            return response
     raise HTTPException(status_code=404)
 
 
@@ -3211,6 +3213,27 @@ async def serve_ltx_file(filepath: str):
     return FileResponse(str(resolved), media_type=media_types.get(suffix, 'application/octet-stream'))
 
 
+@app.get('/ltx-api/file')
+async def serve_ltx_api_file(path: str = ''):
+    """Serve files by absolute or LTX-relative path (for Storyboard frontend)."""
+    import pathlib
+    if not path:
+        return JSONResponse({'error': 'No path'}, status_code=400)
+    # Accept /ltx-files/ prefix or absolute paths within allowed dirs
+    if path.startswith('/ltx-files/'):
+        resolved = pathlib.Path(os.path.join(_LTX_DATA_DIR, path[len('/ltx-files/'):])).resolve()
+    else:
+        resolved = pathlib.Path(path).resolve()
+    allowed = pathlib.Path(_LTX_DATA_DIR).resolve()
+    if not str(resolved).startswith(str(allowed)):
+        return JSONResponse({'error': 'Access denied'}, status_code=403)
+    if not resolved.is_file():
+        return JSONResponse({'error': f'Not found: {resolved}'}, status_code=404)
+    suffix = resolved.suffix.lower()
+    media_types = {'.mp4': 'video/mp4', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webm': 'video/webm'}
+    return FileResponse(str(resolved), media_type=media_types.get(suffix, 'application/octet-stream'))
+
+
 def _rewrite_ltx_paths(content: bytes) -> bytes:
     """Rewrite local file paths in LTX API responses to servable URLs."""
     try:
@@ -3233,6 +3256,8 @@ async def ltx_generate(request: Request):
     global _ltx_generate_result, _ltx_generating
     import aiohttp as _aio_ltx
 
+    # Free VRAM from llama-server before video generation
+    _sp.run(['systemctl', '--user', 'stop', 'numz-server'], capture_output=True)
     _sp.run(['systemctl', '--user', 'start', 'ltx-server'], capture_output=True)
 
     body = await request.body()
@@ -3267,10 +3292,16 @@ async def ltx_generate_result():
     return JSONResponse({'status': 'idle'})
 
 
+_LTX_GPU_PATHS = {'api/generate', 'api/generate-image', 'api/ic-lora/generate'}
+
 @app.api_route('/ltx-api/{path:path}', methods=['GET', 'POST', 'PUT', 'DELETE'])
 async def ltx_proxy(request: Request, path: str):
     """Reverse proxy to LTX-Desktop backend."""
     import aiohttp as _aio_ltx
+
+    # Free VRAM from llama-server before GPU-heavy LTX operations
+    if path in _LTX_GPU_PATHS and request.method == 'POST':
+        _sp.run(['systemctl', '--user', 'stop', 'numz-server'], capture_output=True)
 
     _sp.run(['systemctl', '--user', 'start', 'ltx-server'], capture_output=True)
 
@@ -3278,7 +3309,11 @@ async def ltx_proxy(request: Request, path: str):
     if request.url.query:
         target += f'?{request.url.query}'
 
-    body = await request.body() if request.method in ('POST', 'PUT') else None
+    raw_body = await request.body() if request.method in ('POST', 'PUT') else None
+    # Rewrite /ltx-files/ paths back to actual filesystem paths in request bodies
+    body = raw_body
+    if raw_body and b'/ltx-files/' in raw_body:
+        body = raw_body.replace(b'/ltx-files/', _LTX_DATA_DIR.encode() + b'/')
     headers = {k: v for k, v in request.headers.items() if k.lower() not in ('host', 'content-length')}
 
     try:

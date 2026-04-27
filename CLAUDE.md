@@ -35,6 +35,10 @@ Nothing is tied to the browser session. NOTHING. The browser is merely a way to 
 - **NEVER** modify the numz repo (`/home/aldenb/numz/`) from this project.
 - **NEVER** clone. This repo IS the source.
 
+## Testing Rule: Always Test via Tailscale
+
+The user accesses OpenNumz through Tailscale at `http://100.103.233.31:3000`. When testing any feature (Studio, Quiz, API endpoints), always verify via the Tailscale IP, not `localhost` or `127.0.0.1`. The LTX backend runs on `127.0.0.1:8001` but is only reachable through the OpenNumz proxy at `/ltx-api/*`. Studio frontend lives at `/studio` and all its API calls go through `/ltx-api/api/...`. File serving for generated images/videos goes through `/ltx-api/file?path=...` and `/ltx-files/...`.
+
 ## Build Frontend
 
 ```bash

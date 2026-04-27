@@ -304,3 +304,261 @@ reason:"Before Dunlosky crowns a study technique as \"highly effective,\" he che
 
 var SA_QUESTIONS = {};
 var KEY_TERMS = {};
+
+OVERVIEW_HTML = '<div style="max-width:680px;margin:0 auto">' +
+
+'<div class="card" style="margin-top:8px">' +
+'<h2 style="color:#fff;font-size:28px;margin-bottom:8px;font-weight:700">COGS 10: The Only Chapter You Need to Read</h2>' +
+'<p style="color:#666;font-size:14px;margin-bottom:24px">Lectures 2\u20138 \u2014 Everything tested on Exam 1. Nothing extra.</p>' +
+'<div style="text-align:center;padding:8px 0 0"><button class="btn btn-primary" onclick="toggleOverview()">Back to Quiz</button></div>' +
+'</div>' +
+
+// ─── L2-3: Smart vs Dumb Tech ───
+'<div class="card" style="margin-top:24px">' +
+'<h2 style="color:#fff;font-size:22px;margin-bottom:20px;font-weight:700">Technology Can Make You Smart\u2026 or Dumb</h2>' +
+
+'<p style="color:#b0b0b0;font-size:15px;line-height:1.8;margin-bottom:20px">Human cognition is <strong style="color:#fff">capacity-limited</strong>. Your working memory can only hold so much. But one of our most extraordinary abilities is the ability to <strong style="color:#fff">create tools to help us think</strong>. Norman calls these <strong style="color:#4a9eff">cognitive technologies</strong> (or \u201ccognitive artifacts\u201d).</p>' +
+
+'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:20px 0">' +
+'<div style="background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:16px">' +
+'<div style="color:#4a9eff;font-weight:700;font-size:14px;margin-bottom:6px">General Technology</div>' +
+'<div style="color:#9b9b9b;font-size:14px;line-height:1.6">Expands <strong style="color:#ccc">physical</strong> abilities. A plow, a car, a hammer. Muscle extenders.</div>' +
+'</div>' +
+'<div style="background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:16px">' +
+'<div style="color:#f97316;font-weight:700;font-size:14px;margin-bottom:6px">Cognitive Technology</div>' +
+'<div style="color:#9b9b9b;font-size:14px;line-height:1.6">Expands <strong style="color:#ccc">mental</strong> abilities. Language, calculators, logic, calculus. Brain extenders.</div>' +
+'</div>' +
+'</div>' +
+
+'<p style="color:#b0b0b0;font-size:15px;line-height:1.8;margin-bottom:16px">Cognitive tech can be <strong style="color:#fff">physical</strong> (a pen, a laptop) or <strong style="color:#fff">abstract</strong> (logic, mathematics \u2014 rules that exist in your head).</p>' +
+
+'<p style="color:#b0b0b0;font-size:15px;line-height:1.8;margin-bottom:16px">Technology and cognition are <strong style="color:#fff">mutually elaborated</strong> \u2014 they evolve each other in a feedback loop. We build tools that change how we think, our changed thinking builds better tools, and the cycle reshapes culture.</p>' +
+
+'<div style="background:#1a1a2e;border-left:3px solid #4a9eff;padding:14px 18px;border-radius:0 8px 8px 0;margin:20px 0">' +
+'<div style="color:#4a9eff;font-weight:700;font-size:14px;margin-bottom:6px">Smart vs Dumb</div>' +
+'<div style="color:#b0b0b0;font-size:14px;line-height:1.7">A <strong style="color:#fff">\u201csmart\u201d technology</strong> complements human abilities, enhances memory/reasoning, fits how the mind works. A <strong style="color:#fff">\u201cdumb\u201d technology</strong> traps you \u2014 forces you to act like a machine, replaces active thought with passive consumption (e.g., broadcast TV provides vicarious experience but demands no reflective problem-solving).</div>' +
+'</div>' +
+
+'<div style="background:#2a1a1a;border-left:3px solid #ef4444;padding:14px 18px;border-radius:0 8px 8px 0;margin:20px 0">' +
+'<div style="color:#ef4444;font-weight:700;font-size:14px;margin-bottom:6px">Exam Trap</div>' +
+'<div style="color:#b0b0b0;font-size:14px;line-height:1.7">You <strong style="color:#fff">cannot</strong> label a technology as universally \u201cgood\u201d or \u201cbad.\u201d That\u2019s the whole point of <strong style="color:#fff">context specificity</strong>.</div>' +
+'</div>' +
+'</div>' +
+
+// ─── Context Specificity ───
+'<div class="card" style="margin-top:24px">' +
+'<h2 style="color:#fff;font-size:22px;margin-bottom:20px;font-weight:700">Context Specificity</h2>' +
+'<p style="color:#b0b0b0;font-size:15px;line-height:1.8;margin-bottom:16px">Whether a technology makes you smart or dumb depends on three questions: <strong style="color:#fff">1)</strong> What specific technology? <strong style="color:#fff">2)</strong> For what user(s)? <strong style="color:#fff">3)</strong> For what task/purpose?</p>' +
+'<p style="color:#b0b0b0;font-size:15px;line-height:1.8;margin-bottom:16px">A calculator for an engineer = brilliant cognitive aid. The same calculator for a primary school student = harmful shortcut preventing development of mental math. <strong style="color:#fff">Same tool. Different user. Opposite effect.</strong></p>' +
+'</div>' +
+
+// ─── Spheres of Influence ───
+'<div class="card" style="margin-top:24px">' +
+'<h2 style="color:#fff;font-size:22px;margin-bottom:20px;font-weight:700">Spheres of Influence</h2>' +
+'<p style="color:#b0b0b0;font-size:15px;line-height:1.8;margin-bottom:16px">After nailing down context, evaluate impact across different <strong style="color:#fff">scopes and timescales</strong>:</p>' +
+'<ul style="color:#b0b0b0;font-size:15px;line-height:1.8;padding-left:20px;margin-bottom:16px">' +
+'<li><strong style="color:#fff">Immediate task</strong> \u2014 The calculator helps the student get the right answer today. Helpful.</li>' +
+'<li><strong style="color:#fff">Longer-term task</strong> \u2014 The student never develops mental arithmetic. The biological ability atrophied. Harmful.</li>' +
+'<li><strong style="color:#fff">Society</strong> \u2014 If every student uses a calculator from age 5, it alters educational standards and lowers baseline mathematical literacy.</li>' +
+'</ul>' +
+'<p style="color:#b0b0b0;font-size:15px;line-height:1.8">A technology can be helpful at one sphere and devastating at another.</p>' +
+'</div>' +
+
+// ─── Experiential vs Reflective ───
+'<div class="card" style="margin-top:24px">' +
+'<h2 style="color:#fff;font-size:22px;margin-bottom:20px;font-weight:700">Two Ways Your Brain Thinks</h2>' +
+
+'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0">' +
+'<div style="background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:16px">' +
+'<div style="color:#4a9eff;font-weight:700;font-size:14px;margin-bottom:6px">Experiential Mode</div>' +
+'<div style="color:#9b9b9b;font-size:14px;line-height:1.6">Fast, effortless, automatic. Perceive and react without deliberation. Pattern recognition. Expert behavior. <em>A racecar driver steering. Playing sports.</em></div>' +
+'</div>' +
+'<div style="background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:16px">' +
+'<div style="color:#f97316;font-weight:700;font-size:14px;margin-bottom:6px">Reflective Mode</div>' +
+'<div style="color:#9b9b9b;font-size:14px;line-height:1.6">Slow, effortful, deliberate. Compare, contrast, analyze. Requires focused attention. <em>Writing an essay. Solving a new equation.</em></div>' +
+'</div>' +
+'</div>' +
+
+'<div style="background:#2a1a1a;border-left:3px solid #ef4444;padding:14px 18px;border-radius:0 8px 8px 0;margin:20px 0">' +
+'<div style="color:#ef4444;font-weight:700;font-size:14px;margin-bottom:6px">Critical Point</div>' +
+'<div style="color:#b0b0b0;font-size:14px;line-height:1.7">These modes are <strong style="color:#fff">not mutually exclusive</strong> (they can co-occur) and <strong style="color:#fff">do not map onto specific activities</strong>. Any activity can be performed in either mode depending on expertise. A beginner driver reflects to steer. A veteran steers experientially.</div>' +
+'</div>' +
+
+'<div style="margin-top:20px">' +
+'<div style="color:#fff;font-weight:700;font-size:16px;margin-bottom:12px">Dangerous Mismatches</div>' +
+'<ul style="color:#b0b0b0;font-size:15px;line-height:1.8;padding-left:20px">' +
+'<li><strong style="color:#fff">Experiencing when you should reflect:</strong> Mindlessly watching an educational documentary without critically analyzing the arguments.</li>' +
+'<li><strong style="color:#fff">Reflecting when you should experience:</strong> A pilot reading a complex numerical display during an engine failure. Emergency demands instant reaction, interface forces slow calculation.</li>' +
+'</ul>' +
+'</div>' +
+
+'<div style="margin-top:24px">' +
+'<div style="color:#fff;font-weight:700;font-size:16px;margin-bottom:12px">Machine-Centered vs Human-Centered</div>' +
+'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+'<div style="background:#1a1a1a;border:1px solid #ef4444;border-radius:10px;padding:16px">' +
+'<div style="color:#ef4444;font-weight:700;font-size:14px;margin-bottom:6px">Machine-Centered</div>' +
+'<div style="color:#9b9b9b;font-size:14px;line-height:1.6">Humans = unreliable components. Blames \u201chuman error.\u201d Expects robotic behavior. <strong style="color:#ccc">= task + machine</strong></div>' +
+'</div>' +
+'<div style="background:#1a1a1a;border:1px solid #22c55e;border-radius:10px;padding:16px">' +
+'<div style="color:#22c55e;font-weight:700;font-size:14px;margin-bottom:6px">Human-Centered</div>' +
+'<div style="color:#9b9b9b;font-size:14px;line-height:1.6">Accounts for how humans actually think. Distractibility = <strong style="color:#ccc">strength</strong> (scanning for unexpected events). <strong style="color:#ccc">= task + human + machine</strong></div>' +
+'</div>' +
+'</div>' +
+'</div>' +
+'</div>' +
+
+// ─── Representation ───
+'<div class="card" style="margin-top:24px">' +
+'<h2 style="color:#fff;font-size:22px;margin-bottom:20px;font-weight:700">The Power of Representation</h2>' +
+
+'<p style="color:#b0b0b0;font-size:15px;line-height:1.8;margin-bottom:16px">Norman: <em>\u201cThe power of the unaided mind is highly overrated.\u201d</em> External aids like paper and writing overcome the biological limits of our brains. But <strong style="color:#fff">how</strong> you represent information determines how your brain processes it.</p>' +
+
+'<div style="background:#1a2a1a;border-left:3px solid #22c55e;padding:14px 18px;border-radius:0 8px 8px 0;margin:20px 0">' +
+'<div style="color:#22c55e;font-weight:700;font-size:14px;margin-bottom:6px">Ticktacktoe vs The Game of 15</div>' +
+'<div style="color:#b0b0b0;font-size:14px;line-height:1.7">These games are <strong style="color:#fff">mathematically identical</strong>. But ticktacktoe is easy because the visual grid lets you process patterns experientially. The Game of 15 forces mental arithmetic (reflective). <strong style="color:#fff">The right representation turns a reflective task into an experiential one.</strong></div>' +
+'</div>' +
+
+'<div style="color:#fff;font-weight:700;font-size:16px;margin:24px 0 12px">Triadic Semiotics (The Semiotic Triangle)</div>' +
+'<ul style="color:#b0b0b0;font-size:15px;line-height:1.8;padding-left:20px;margin-bottom:16px">' +
+'<li><strong style="color:#4a9eff">Referent (sign-object)</strong> \u2014 The actual thing in the real world. Physical streets of a city.</li>' +
+'<li><strong style="color:#4a9eff">Representation (sign-vehicle)</strong> \u2014 The external physical thing doing the referring. Ink on a map. Pixels on screen.</li>' +
+'<li><strong style="color:#4a9eff">Interpretant (sign-mind)</strong> \u2014 The understanding inside the user\u2019s mind. Red octagon \u2192 \u201cStop!\u201d</li>' +
+'</ul>' +
+'<p style="color:#b0b0b0;font-size:15px;line-height:1.8;margin-bottom:16px">Media encode info differently: <strong style="color:#fff">Text</strong> = symbolic characters. <strong style="color:#fff">Graphs</strong> = spatial position. <strong style="color:#fff">Photos</strong> = iconic/naturalistic images.</p>' +
+
+'<div style="color:#fff;font-weight:700;font-size:16px;margin:24px 0 12px">Mode Matching</div>' +
+'<ul style="color:#b0b0b0;font-size:15px;line-height:1.8;padding-left:20px">' +
+'<li><strong style="color:#22c55e">Good:</strong> Analog speedometer dial \u2192 driver perceives speed instantly (experiential).</li>' +
+'<li><strong style="color:#22c55e">Good:</strong> GPS text list \u2192 driver consciously reads and plans (reflective).</li>' +
+'<li><strong style="color:#ef4444">Deadly mismatch:</strong> Dashboard flashing decimal tire-pressure numbers during a blowout \u2192 forces reflective processing when the situation demands experiential reaction.</li>' +
+'</ul>' +
+'</div>' +
+
+// ─── Affordances ───
+'<div class="card" style="margin-top:24px">' +
+'<h2 style="color:#fff;font-size:22px;margin-bottom:20px;font-weight:700">Affordances</h2>' +
+
+'<div style="background:#1a1a2e;border-left:3px solid #4a9eff;padding:14px 18px;border-radius:0 8px 8px 0;margin:0 0 20px">' +
+'<div style="color:#b0b0b0;font-size:14px;line-height:1.7"><strong style="color:#4a9eff">Affordance</strong> = a possibility for action; a <strong style="color:#fff">relationship</strong> between an object\u2019s properties and the user\u2019s capabilities. Affordances are <strong style="color:#fff">relational</strong>. Stairs afford climbing to an adult, not to a crawling baby. Same stairs, different affordance.</div>' +
+'</div>' +
+
+'<p style="color:#b0b0b0;font-size:15px;line-height:1.8;margin-bottom:16px">Concept invented by <strong style="color:#fff">J.J. Gibson</strong> (1979, ecological psychology). Norman adapted it for product design.</p>' +
+
+'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:16px 0">' +
+'<div style="background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:16px">' +
+'<div style="color:#4a9eff;font-weight:700;font-size:14px;margin-bottom:6px">Affordance</div>' +
+'<div style="color:#9b9b9b;font-size:14px;line-height:1.6">What actions are <strong style="color:#ccc">physically possible</strong>. A touchscreen affords touching anywhere.</div>' +
+'</div>' +
+'<div style="background:#1a1a1a;border:1px solid #333;border-radius:10px;padding:16px">' +
+'<div style="color:#f97316;font-weight:700;font-size:14px;margin-bottom:6px">Signifier</div>' +
+'<div style="color:#9b9b9b;font-size:14px;line-height:1.6">Communicates <strong style="color:#ccc">where and how</strong> to act. The blue button signifies \u201ctap here to send.\u201d</div>' +
+'</div>' +
+'</div>' +
+
+'<div style="color:#fff;font-weight:700;font-size:16px;margin:24px 0 12px">When Design Goes Wrong</div>' +
+'<ul style="color:#b0b0b0;font-size:15px;line-height:1.8;padding-left:20px;margin-bottom:16px">' +
+'<li><strong style="color:#fff">Ambiguous mapping:</strong> A door with identical handles on both sides, but one must be pushed. A swipe gesture meaning \u201cdelete\u201d and \u201csave\u201d depending on context.</li>' +
+'<li><strong style="color:#fff">Unintended affordances:</strong> Users interact in ways the designer never planned (book as doorstop). Designers add signifiers to guide toward intended use.</li>' +
+'</ul>' +
+'</div>' +
+
+// ─── Davis & Chouinard Spectrum ───
+'<div class="card" style="margin-top:24px">' +
+'<h2 style="color:#fff;font-size:22px;margin-bottom:20px;font-weight:700">The Spectrum of Force (Davis & Chouinard)</h2>' +
+'<p style="color:#b0b0b0;font-size:15px;line-height:1.8;margin-bottom:20px">Affordances exist on a spectrum from gentle suggestion to absolute compulsion:</p>' +
+
+'<div style="background:#1a1a1a;border-left:3px solid #22c55e;border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:10px">' +
+'<strong style="color:#22c55e">Request</strong><span style="color:#9b9b9b;font-size:14px"> \u2014 Encourages behavior, you can bypass. A <strong style="color:#ccc">speed bump</strong> requests you slow down. You can speed over it.</span>' +
+'</div>' +
+
+'<div style="background:#1a1a1a;border-left:3px solid #f97316;border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:10px">' +
+'<strong style="color:#f97316">Discourage</strong><span style="color:#9b9b9b;font-size:14px"> \u2014 Makes behavior frustratingly difficult. A dating app with <strong style="color:#ccc">preset emojis only</strong> discourages expressive communication.</span>' +
+'</div>' +
+
+'<div style="background:#1a1a1a;border-left:3px solid #ef4444;border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:10px">' +
+'<strong style="color:#ef4444">Demand</strong><span style="color:#9b9b9b;font-size:14px"> \u2014 Conditions use on a specific action, <strong style="color:#ccc">cannot bypass</strong>. Facebook requiring gender before registration. A mandatory Terms of Service checkbox.</span>' +
+'</div>' +
+
+'<div style="background:#1a1a1a;border-left:3px solid #b91c1c;border-radius:0 8px 8px 0;padding:14px 18px;margin-bottom:16px">' +
+'<strong style="color:#dc2626">Refuse</strong><span style="color:#9b9b9b;font-size:14px"> \u2014 Absolutely denies a capability. A car that <strong style="color:#ccc">won\u2019t start</strong> without the key fob. No workaround.</span>' +
+'</div>' +
+
+'<div style="background:#2a1a1a;border-left:3px solid #ef4444;padding:14px 18px;border-radius:0 8px 8px 0;margin:16px 0">' +
+'<div style="color:#ef4444;font-weight:700;font-size:14px;margin-bottom:6px">Exam Distinction</div>' +
+'<div style="color:#b0b0b0;font-size:14px;line-height:1.7">Can you bypass it? Speed bump = request (yes). Mandatory checkbox = demand (no). Also: affordances are <strong style="color:#fff">NOT static properties of objects</strong>. They are dynamic, relational, context-dependent. If exam says static \u2192 <strong style="color:#fff">False</strong>.</div>' +
+'</div>' +
+'</div>' +
+
+// ─── Multimedia Learning ───
+'<div class="card" style="margin-top:24px">' +
+'<h2 style="color:#fff;font-size:22px;margin-bottom:20px;font-weight:700">Multimedia Learning (Mayer)</h2>' +
+'<p style="color:#b0b0b0;font-size:15px;line-height:1.8;margin-bottom:20px">The brain\u2019s processing capacity is limited. Everything on screen either helps learning or competes with it.</p>' +
+
+'<div style="background:#1a1a2e;border-left:3px solid #4a9eff;padding:12px 18px;border-radius:0 8px 8px 0;margin-bottom:10px">' +
+'<strong style="color:#4a9eff">Coherence</strong><span style="color:#b0b0b0;font-size:14px"> \u2014 Remove all extraneous material. No background music, decorative animations, tangent facts. They steal processing power.</span>' +
+'</div>' +
+
+'<div style="background:#1a1a2e;border-left:3px solid #4a9eff;padding:12px 18px;border-radius:0 8px 8px 0;margin-bottom:10px">' +
+'<strong style="color:#4a9eff">Segmenting</strong><span style="color:#b0b0b0;font-size:14px"> \u2014 Break material into short, user-controlled chunks with pause points. Not one long uninterrupted stream.</span>' +
+'</div>' +
+
+'<div style="background:#1a1a2e;border-left:3px solid #4a9eff;padding:12px 18px;border-radius:0 8px 8px 0;margin-bottom:10px">' +
+'<strong style="color:#4a9eff">Split-Attention (Spatial Contiguity)</strong><span style="color:#b0b0b0;font-size:14px"> \u2014 Text and images physically close together. Labels next to diagram parts, not on a separate page.</span>' +
+'</div>' +
+
+'<div style="background:#1a1a2e;border-left:3px solid #4a9eff;padding:12px 18px;border-radius:0 8px 8px 0;margin-bottom:10px">' +
+'<strong style="color:#4a9eff">Signaling</strong><span style="color:#b0b0b0;font-size:14px"> \u2014 Use arrows, bold, highlights to tell the brain where to focus.</span>' +
+'</div>' +
+
+'<div style="background:#1a1a2e;border-left:3px solid #4a9eff;padding:12px 18px;border-radius:0 8px 8px 0;margin-bottom:10px">' +
+'<strong style="color:#4a9eff">Multimedia</strong><span style="color:#b0b0b0;font-size:14px"> \u2014 Words + pictures together > words alone.</span>' +
+'</div>' +
+'</div>' +
+
+// ─── Learning Techniques ───
+'<div class="card" style="margin-top:24px">' +
+'<h2 style="color:#fff;font-size:22px;margin-bottom:20px;font-weight:700">Learning Techniques (Dunlosky)</h2>' +
+'<p style="color:#b0b0b0;font-size:15px;line-height:1.8;margin-bottom:16px">Dunlosky evaluated study strategies by checking <strong style="color:#fff">generalizability variables</strong> \u2014 does it work across different materials, ages, and settings?</p>' +
+
+'<div style="background:#1a2a1a;border-left:3px solid #22c55e;padding:14px 18px;border-radius:0 8px 8px 0;margin-bottom:10px">' +
+'<div style="color:#22c55e;font-weight:700;font-size:14px;margin-bottom:6px">Practice Testing \u2014 HIGH</div>' +
+'<div style="color:#b0b0b0;font-size:14px;line-height:1.7">Forces <strong style="color:#fff">active retrieval</strong> from memory. The act of pulling information out physically strengthens the trace. Even getting it wrong helps \u2014 the retrieval effort builds the pathway.</div>' +
+'</div>' +
+
+'<div style="background:#1a2a1a;border-left:3px solid #22c55e;padding:14px 18px;border-radius:0 8px 8px 0;margin-bottom:10px">' +
+'<div style="color:#22c55e;font-weight:700;font-size:14px;margin-bottom:6px">Distributed Practice \u2014 HIGH</div>' +
+'<div style="color:#b0b0b0;font-size:14px;line-height:1.7">Space studying over time. The delay forces your brain to partially forget, then <strong style="color:#fff">work hard to retrieve and reconstruct</strong>. That effort carves permanent pathways. Cramming only works for one day.</div>' +
+'</div>' +
+
+'<div style="background:#2a1a1a;border-left:3px solid #ef4444;padding:14px 18px;border-radius:0 8px 8px 0;margin-bottom:10px">' +
+'<div style="color:#ef4444;font-weight:700;font-size:14px;margin-bottom:6px">Highlighting/Underlining \u2014 LOW</div>' +
+'<div style="color:#b0b0b0;font-size:14px;line-height:1.7">Feels productive. Actually <strong style="color:#fff">passive</strong>. You mark text without processing meaning. Creates a <strong style="color:#fff">false illusion of competence</strong> \u2014 you recognize highlighted words but can\u2019t retrieve them from memory.</div>' +
+'</div>' +
+
+'<div style="background:#1a1a2e;border-left:3px solid #4a9eff;padding:14px 18px;border-radius:0 8px 8px 0;margin-bottom:16px">' +
+'<div style="color:#4a9eff;font-weight:700;font-size:14px;margin-bottom:6px">Summarization \u2014 MODERATE</div>' +
+'<div style="color:#b0b0b0;font-size:14px;line-height:1.7">Forces more processing than highlighting, but not as powerful as testing yourself.</div>' +
+'</div>' +
+
+'<p style="color:#b0b0b0;font-size:15px;line-height:1.8"><strong style="color:#fff">Winning combo:</strong> Write summaries, then test yourself later in the week = summarization + practice testing + spaced retrieval.</p>' +
+'</div>' +
+
+// ─── Rote vs Meaningful ───
+'<div class="card" style="margin-top:24px">' +
+'<h2 style="color:#fff;font-size:22px;margin-bottom:20px;font-weight:700">Rote vs Meaningful Learning</h2>' +
+'<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">' +
+'<div style="background:#1a1a1a;border:1px solid #ef4444;border-radius:10px;padding:16px">' +
+'<div style="color:#ef4444;font-weight:700;font-size:14px;margin-bottom:6px">Rote Learning</div>' +
+'<div style="color:#9b9b9b;font-size:14px;line-height:1.6">Memorize facts for a test. <strong style="color:#ccc">Cannot apply</strong> to new situations. Rephrased question = stuck.</div>' +
+'</div>' +
+'<div style="background:#1a1a1a;border:1px solid #22c55e;border-radius:10px;padding:16px">' +
+'<div style="color:#22c55e;font-weight:700;font-size:14px;margin-bottom:6px">Meaningful Learning</div>' +
+'<div style="color:#9b9b9b;font-size:14px;line-height:1.6">Understand deeply enough to <strong style="color:#ccc">apply to novel, unseen problems</strong>. The real goal.</div>' +
+'</div>' +
+'</div>' +
+'<p style="color:#b0b0b0;font-size:15px;line-height:1.8">The trap: highlighting and rote memorization create the <em>illusion</em> of meaningful learning while only producing rote learning.</p>' +
+'</div>' +
+
+'<div style="text-align:center;padding:32px 0"><button class="btn btn-primary" onclick="toggleOverview()">Back to Quiz</button></div>' +
+
+'</div>';
