@@ -11,25 +11,37 @@
 })();
 
 
-// === Sidebar buttons (Quiz + Jarvis + Mode Slider) — injected together ===
+// === Sidebar buttons (Quiz + Studio) — injected into both desktop and mobile ===
 (function() {
   if (['/code','/jarvis','/quiz','/studio'].indexOf(window.location.pathname) !== -1) return;
+  var BTN_HTML = '<a href="/studio" class="sidebar-link-btn" onclick="event.preventDefault();window.location.href=\'/studio\'">Studio</a><a href="/quiz" class="sidebar-link-btn" onclick="event.preventDefault();window.location.href=\'/quiz\'">Quiz</a>';
+
   function inject() {
-    if (document.getElementById('sidebar-custom-btns')) return;
-    var btn = document.getElementById('sidebar-new-chat-button');
-    if (!btn || btn.classList.contains('hidden')) {
-      var all = document.querySelectorAll('#sidebar-new-chat-button');
-      btn = null;
-      for (var i = 0; i < all.length; i++) { if (!all[i].classList.contains('hidden')) { btn = all[i]; break; } }
-      if (!btn) return;
+    // Desktop: inject after sidebar-new-chat-button container
+    if (!document.getElementById('sidebar-custom-btns')) {
+      var btn = document.getElementById('sidebar-new-chat-button');
+      if (btn && btn.classList.contains('hidden')) {
+        var all = document.querySelectorAll('#sidebar-new-chat-button');
+        btn = null;
+        for (var i = 0; i < all.length; i++) { if (!all[i].classList.contains('hidden')) { btn = all[i]; break; } }
+      }
+      if (btn) {
+        var container = btn.closest('div.pb-1\\.5') || btn.parentElement?.parentElement;
+        if (container && container.parentElement) {
+          var wrap = document.createElement('div');
+          wrap.id = 'sidebar-custom-btns';
+          wrap.className = 'sidebar-custom-btns';
+          wrap.innerHTML = BTN_HTML;
+          container.parentElement.insertBefore(wrap, container.nextSibling);
+        }
+      }
     }
-    var container = btn.closest('div.pb-1\\.5') || btn.parentElement?.parentElement;
-    if (!container) return;
-    var wrap = document.createElement('div');
-    wrap.id = 'sidebar-custom-btns';
-    wrap.className = 'sidebar-custom-btns';
-    wrap.innerHTML = '<a href="/studio" class="sidebar-link-btn" onclick="event.preventDefault();window.location.href=\'/studio\'">Studio</a><a href="/quiz" class="sidebar-link-btn" onclick="event.preventDefault();window.location.href=\'/quiz\'">Quiz</a>';
-    container.parentElement.insertBefore(wrap, container.nextSibling);
+
+    // Mobile: inject into the dedicated mobile container
+    var mob = document.querySelector('.sidebar-custom-btns-mobile');
+    if (mob && !mob.hasChildNodes()) {
+      mob.innerHTML = '<div class="sidebar-custom-btns">' + BTN_HTML + '</div>';
+    }
   }
   new MutationObserver(inject).observe(document.documentElement, { childList: true, subtree: true });
 })();
