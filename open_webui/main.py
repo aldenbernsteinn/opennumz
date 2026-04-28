@@ -3363,6 +3363,131 @@ STORYBOARD_TOOLS = [
 _NUMZ_ENDPOINT = 'http://100.103.233.31:8899/v1/chat/completions'
 
 
+@app.post('/ltx-api/api/storyboard/generate-character-refs')
+async def generate_character_refs_direct(request: Request):
+    """Generate character ref prompts directly via numz — bypasses LTX backend."""
+    import aiohttp as _aio_charref
+
+    body = await request.json()
+    name = body.get('name', 'Character')
+    description = body.get('description', '')
+    style_desc = body.get('style_description', '')
+    style_image_b64 = body.get('style_image_base64', '')
+    ref_image_b64 = body.get('reference_image_base64', '')
+
+    system = (
+        "You write a SINGLE detailed character description for an animation model sheet. "
+        "Your output is ONE paragraph that describes the character's complete appearance. "
+        "This description will be combined with angle/pose instructions separately.\n\n"
+        "RULES:\n"
+        "- Describe the character's COMPLETE appearance in one paragraph: face shape, eye color/shape, "
+        "eyebrows, nose, mouth, skin tone, hair (color, length, style, texture), body build, height, "
+        "outfit (every piece of clothing with colors and details), shoes, accessories.\n"
+        "- If you see a reference photo, describe THAT EXACT person's appearance in precise detail.\n"
+        "- If you see a style reference, mention the visual style.\n"
+        "- Do NOT mention poses, angles, backgrounds, or lighting — just the character.\n"
+        '- Output ONLY valid JSON: {"description": "one paragraph"}'
+    )
+
+    user_parts = []
+    if style_image_b64.strip():
+        url = style_image_b64 if style_image_b64.startswith('data:') else f'data:image/png;base64,{style_image_b64}'
+        user_parts.append({'type': 'text', 'text': 'Target visual style (match this look):'})
+        user_parts.append({'type': 'image_url', 'image_url': {'url': url}})
+    if ref_image_b64.strip():
+        # Auto-convert to JPEG for llama-server compatibility
+        try:
+            import base64 as _b64, io as _io
+            from PIL import Image as _PILImg
+            raw = ref_image_b64
+            if raw.startswith('data:'):
+                b64_data = raw.split(',', 1)[1] if ',' in raw else raw
+            else:
+                b64_data = raw
+            img_bytes = _b64.b64decode(b64_data)
+            img = _PILImg.open(_io.BytesIO(img_bytes)).convert('RGB')
+            max_dim = 1536
+            if img.width > max_dim or img.height > max_dim:
+                img.thumbnail((max_dim, max_dim), _PILImg.LANCZOS)
+            buf = _io.BytesIO()
+            img.save(buf, format='JPEG', quality=85)
+            url = f'data:image/jpeg;base64,{_b64.b64encode(buf.getvalue()).decode()}'
+        except Exception:
+            url = ref_image_b64 if ref_image_b64.startswith('data:') else f'data:image/png;base64,{ref_image_b64}'
+        user_parts.append({'type': 'text', 'text': 'Reference photo of the character (recreate this person):'})
+        user_parts.append({'type': 'image_url', 'image_url': {'url': url}})
+
+    style_note = f' in {style_desc} style' if style_desc.strip() else ''
+    desc_note = f'\nDescription: {description}' if description.strip() else ''
+    user_parts.append({'type': 'text', 'text': (
+        f"Describe the complete appearance of character '{name}'{style_note}.{desc_note}\n\n"
+        f"Write ONE detailed paragraph covering: face, eyes, hair, skin, body, outfit, shoes, accessories.\n"
+        f'Output JSON: {{"description": "one paragraph"}}'
+    )})
+
+    payload = {
+        'model': 'qwen',
+        'messages': [
+            {'role': 'system', 'content': system},
+            {'role': 'user', 'content': user_parts},
+        ],
+        'temperature': 0.7,
+        'chat_template_kwargs': {'enable_thinking': False},
+        'enable_thinking': False,
+    }
+
+    # Ensure numz is running and ready (stop LTX if needed to free VRAM)
+    _sp.run(['systemctl', '--user', 'stop', 'ltx-server'], capture_output=True)
+    _sp.run(['systemctl', '--user', 'start', 'numz-server'], capture_output=True)
+    for _ in range(60):
+        try:
+            async with _aio_charref.ClientSession(timeout=_aio_charref.ClientTimeout(total=3)) as _ns:
+                async with _ns.get('http://100.103.233.31:8899/health') as _nr:
+                    if _nr.status == 200:
+                        _body = await _nr.json()
+                        if _body.get('status') == 'ok':
+                            break
+        except Exception:
+            pass
+        import asyncio; await asyncio.sleep(2)
+
+    try:
+        async with _aio_charref.ClientSession(timeout=_aio_charref.ClientTimeout(total=120)) as session:
+            async with session.post(_NUMZ_ENDPOINT, json=payload) as resp:
+                if resp.status != 200:
+                    text = await resp.text()
+                    return JSONResponse({'error': f'LLM error: {text}'}, status_code=resp.status)
+                data = await resp.json()
+                content = data.get('choices', [{}])[0].get('message', {}).get('content', '')
+
+                # Parse JSON from LLM response
+                import re
+                json_match = re.search(r'\{[^{}]*\}', content)
+                if json_match:
+                    parsed = json.loads(json_match.group())
+                else:
+                    parsed = json.loads(content)
+
+                char_desc = parsed.get('description', '')
+                if not char_desc:
+                    for v in parsed.values():
+                        if isinstance(v, str) and len(v) > 20:
+                            char_desc = v; break
+
+                if not char_desc:
+                    return JSONResponse({'error': f'LLM returned no description. Keys: {list(parsed.keys())}'}, status_code=422)
+
+                # Build angle prompts
+                style_suffix = f', {style_desc} style' if style_desc.strip() else ''
+                views = [
+                    {'view': 'front', 'prompt': f'character model sheet, front view, facing the viewer, full body, standing straight, arms at sides, solid flat gray background, even flat lighting, no shadows, {char_desc}{style_suffix}', 'image_path': None},
+                    {'view': 'side', 'prompt': f'character model sheet, side profile view, full body, facing left, strict left profile silhouette, solid flat gray background, even flat lighting, no shadows, {char_desc}{style_suffix}', 'image_path': None},
+                ]
+                return JSONResponse({'status': 'success', 'views': views})
+    except Exception as e:
+        return JSONResponse({'error': str(e)}, status_code=500)
+
+
 @app.post('/ltx-api/api/storyboard/describe-outfit-images')
 async def describe_outfit_images(request: Request):
     """Use the LLM to describe clothing/accessory items from reference images."""
@@ -3557,7 +3682,9 @@ async def ltx_proxy(request: Request, path: str):
     global _ltx_vram_freed_at
 
     # LLM paths need llama-server running (it may have been stopped for GPU work)
-    if path in _LTX_LLM_PATHS and request.method == 'POST':
+    is_llm_path = path in _LTX_LLM_PATHS or path.startswith('api/storyboard/')
+    if is_llm_path and request.method == 'POST':
+        logging.info('[ltx-proxy] LLM path: %s — ensuring numz is ready', path)
         _sp.run(['systemctl', '--user', 'start', 'numz-server'], capture_output=True)
         # Wait for llama-server model to be fully loaded (not just process up)
         # /v1/models returns 200 before the model is ready, so we ping /health
@@ -3575,6 +3702,7 @@ async def ltx_proxy(request: Request, path: str):
                 pass
             import asyncio as _aio_sleep
             await _aio_sleep.sleep(2)
+        logging.info('[ltx-proxy] numz wait done for %s (attempt %d/60)', path, _attempt + 1)
 
     # Free VRAM from llama-server once per generation batch (30s debounce)
     if path in _LTX_GPU_PATHS and request.method == 'POST' and (_time.time() - _ltx_vram_freed_at) > 30:
