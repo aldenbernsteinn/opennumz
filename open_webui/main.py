@@ -3514,9 +3514,11 @@ async def storyboard_chat_stream(request: Request):
         for _attempt in range(30):
             try:
                 async with _aio_sg.ClientSession(timeout=_aio_sg.ClientTimeout(total=2)) as _ns:
-                    async with _ns.get('http://100.103.233.31:8899/v1/models') as _nr:
+                    async with _ns.get('http://100.103.233.31:8899/health') as _nr:
                         if _nr.status == 200:
-                            break
+                            _body = await _nr.json()
+                            if _body.get('status') == 'ok':
+                                break
             except Exception:
                 pass
             import asyncio
@@ -3557,14 +3559,18 @@ async def ltx_proxy(request: Request, path: str):
     # LLM paths need llama-server running (it may have been stopped for GPU work)
     if path in _LTX_LLM_PATHS and request.method == 'POST':
         _sp.run(['systemctl', '--user', 'start', 'numz-server'], capture_output=True)
-        # Wait for llama-server to be reachable (model loading can take seconds)
+        # Wait for llama-server model to be fully loaded (not just process up)
+        # /v1/models returns 200 before the model is ready, so we ping /health
+        # which returns {"status":"ok"} only after model warmup completes
         import aiohttp as _aio_numz
-        for _attempt in range(30):
+        for _attempt in range(60):
             try:
-                async with _aio_numz.ClientSession(timeout=_aio_numz.ClientTimeout(total=2)) as _ns:
-                    async with _ns.get('http://100.103.233.31:8899/v1/models') as _nr:
+                async with _aio_numz.ClientSession(timeout=_aio_numz.ClientTimeout(total=3)) as _ns:
+                    async with _ns.get('http://100.103.233.31:8899/health') as _nr:
                         if _nr.status == 200:
-                            break
+                            body = await _nr.json()
+                            if body.get('status') == 'ok':
+                                break
             except Exception:
                 pass
             import asyncio as _aio_sleep
