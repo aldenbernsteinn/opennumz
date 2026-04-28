@@ -3363,6 +3363,58 @@ STORYBOARD_TOOLS = [
 _NUMZ_ENDPOINT = 'http://100.103.233.31:8899/v1/chat/completions'
 
 
+@app.post('/ltx-api/api/storyboard/describe-outfit-images')
+async def describe_outfit_images(request: Request):
+    """Use the LLM to describe clothing/accessory items from reference images."""
+    import aiohttp as _aio_outfit
+
+    body = await request.json()
+    images = body.get('images', [])
+    if not images:
+        return JSONResponse({'description': ''})
+
+    # Ensure numz is running
+    _sp.run(['systemctl', '--user', 'start', 'numz-server'], capture_output=True)
+    import aiohttp as _aio_wait
+    for _ in range(30):
+        try:
+            async with _aio_wait.ClientSession(timeout=_aio_wait.ClientTimeout(total=2)) as _ns:
+                async with _ns.get('http://100.103.233.31:8899/v1/models') as _nr:
+                    if _nr.status == 200: break
+        except Exception: pass
+        import asyncio; await asyncio.sleep(2)
+
+    # Build multimodal message with all outfit images
+    content_parts = [{'type': 'text', 'text': (
+        'Describe each clothing/accessory item in these images. '
+        'For each item, write: what it is, its color, material, style, and any distinctive details. '
+        'Be specific and concise. Output a single paragraph combining all items.'
+    )}]
+    for img_data_url in images:
+        # Ensure it's a proper data URL
+        url = img_data_url if img_data_url.startswith('data:') else f'data:image/png;base64,{img_data_url}'
+        content_parts.append({'type': 'image_url', 'image_url': {'url': url}})
+
+    payload = {
+        'model': 'qwen',
+        'messages': [{'role': 'user', 'content': content_parts}],
+        'temperature': 0.3,
+        'chat_template_kwargs': {'enable_thinking': False},
+        'enable_thinking': False,
+    }
+
+    try:
+        async with _aio_outfit.ClientSession(timeout=_aio_outfit.ClientTimeout(total=60)) as session:
+            async with session.post(_NUMZ_ENDPOINT, json=payload) as resp:
+                if resp.status != 200:
+                    return JSONResponse({'description': ''})
+                data = await resp.json()
+                desc = data.get('choices', [{}])[0].get('message', {}).get('content', '')
+                return JSONResponse({'description': desc.strip()})
+    except Exception:
+        return JSONResponse({'description': ''})
+
+
 @app.post('/ltx-api/api/storyboard/chat-stream')
 async def storyboard_chat_stream(request: Request):
     """Stream storyboard chat directly from llama-server. SSE format."""
