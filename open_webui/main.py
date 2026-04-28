@@ -3380,11 +3380,13 @@ async def generate_character_refs_direct(request: Request):
         "Your output is ONE paragraph that describes the character's complete appearance. "
         "This description will be combined with angle/pose instructions separately.\n\n"
         "RULES:\n"
-        "- Describe the character's COMPLETE appearance in one paragraph: face shape, eye color/shape, "
+        "- Describe the character's appearance in one paragraph: face shape, eye color/shape, "
         "eyebrows, nose, mouth, skin tone, hair (color, length, style, texture), body build, height, "
         "outfit (every piece of clothing with colors and details), shoes, accessories.\n"
-        "- If you see a reference photo, describe THAT EXACT person's appearance in precise detail.\n"
-        "- If you see a style reference, mention the visual style.\n"
+        "- If you see a reference photo: describe THAT person's FACE, HAIR, SKIN, and BODY BUILD from the photo. "
+        "But for CLOTHING/OUTFIT, IGNORE what they are wearing in the photo. "
+        "Use ONLY the outfit described in the text description field instead.\n"
+        "- If you see a style reference, match that visual style.\n"
         "- Do NOT mention poses, angles, backgrounds, or lighting — just the character.\n"
         '- Output ONLY valid JSON: {"description": "one paragraph"}'
     )
