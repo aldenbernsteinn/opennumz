@@ -3711,8 +3711,9 @@ async def ltx_proxy(request: Request, path: str):
         _sp.run(['systemctl', '--user', 'stop', 'numz-server'], capture_output=True)
         _ltx_vram_freed_at = _time.time()
 
-    # Ensure LTX server is running (idempotent — no-op if already up)
-    _sp.run(['systemctl', '--user', 'start', 'ltx-server'], capture_output=True)
+    # Only start LTX server for GPU operations (image/video gen), not every request
+    if path in _LTX_GPU_PATHS and request.method == 'POST':
+        _sp.run(['systemctl', '--user', 'start', 'ltx-server'], capture_output=True)
 
     # For GPU operations, wait until LTX server is reachable
     if path in _LTX_GPU_PATHS and request.method == 'POST':
