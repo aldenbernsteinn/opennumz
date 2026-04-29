@@ -3438,8 +3438,7 @@ async def generate_character_refs_direct(request: Request):
         'enable_thinking': False,
     }
 
-    # Ensure numz is running and ready (stop LTX if needed to free VRAM)
-    _sp.run(['systemctl', '--user', 'stop', 'ltx-server'], capture_output=True)
+    # Ensure numz is running and ready
     _sp.run(['systemctl', '--user', 'start', 'numz-server'], capture_output=True)
     for _ in range(60):
         try:
@@ -3711,9 +3710,8 @@ async def ltx_proxy(request: Request, path: str):
         _sp.run(['systemctl', '--user', 'stop', 'numz-server'], capture_output=True)
         _ltx_vram_freed_at = _time.time()
 
-    # Only start LTX server for GPU operations (image/video gen), not every request
-    if path in _LTX_GPU_PATHS and request.method == 'POST':
-        _sp.run(['systemctl', '--user', 'start', 'ltx-server'], capture_output=True)
+    # Ensure LTX server is running — it's lightweight on standby (no GPU models loaded until generation)
+    _sp.run(['systemctl', '--user', 'start', 'ltx-server'], capture_output=True)
 
     # For GPU operations, wait until LTX server is reachable
     if path in _LTX_GPU_PATHS and request.method == 'POST':
