@@ -3429,6 +3429,7 @@ async def generate_character_refs_direct(request: Request):
             url = f'data:image/jpeg;base64,{_b64.b64encode(buf.getvalue()).decode()}'
         except Exception:
             url = ref_image_b64 if ref_image_b64.startswith('data:') else f'data:image/png;base64,{ref_image_b64}'
+        logging.info('[charref] Image URL mime: %s, b64 len: %d', url[:30], len(url))
         user_parts.append({'type': 'text', 'text': 'Reference photo of the character (recreate this person):'})
         user_parts.append({'type': 'image_url', 'image_url': {'url': url}})
 
