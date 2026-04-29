@@ -3374,6 +3374,9 @@ async def generate_character_refs_direct(request: Request):
     style_desc = body.get('style_description', '')
     style_image_b64 = body.get('style_image_base64', '')
     ref_image_b64 = body.get('reference_image_base64', '')
+    # If a previously generated description is provided, skip the LLM call
+    # This ensures the EXACT same character description is reused for new looks
+    saved_description = body.get('generated_description', '')
 
     system = (
         "You write a SINGLE detailed character description for an animation model sheet. "
@@ -3438,47 +3441,46 @@ async def generate_character_refs_direct(request: Request):
         'enable_thinking': False,
     }
 
-    # Ensure numz is running and ready
-    _sp.run(['systemctl', '--user', 'start', 'numz-server'], capture_output=True)
-    for _ in range(60):
+    # Resolve character description — reuse saved or generate new
+    char_desc = ''
+    if saved_description.strip():
+        char_desc = saved_description
+    else:
+        _sp.run(['systemctl', '--user', 'start', 'numz-server'], capture_output=True)
+        for _ in range(60):
+            try:
+                async with _aio_charref.ClientSession(timeout=_aio_charref.ClientTimeout(total=3)) as _ns:
+                    async with _ns.get('http://100.103.233.31:8899/health') as _nr:
+                        if _nr.status == 200:
+                            _hb = await _nr.json()
+                            if _hb.get('status') == 'ok':
+                                break
+            except Exception:
+                pass
+            import asyncio; await asyncio.sleep(2)
+
         try:
-            async with _aio_charref.ClientSession(timeout=_aio_charref.ClientTimeout(total=3)) as _ns:
-                async with _ns.get('http://100.103.233.31:8899/health') as _nr:
-                    if _nr.status == 200:
-                        _body = await _nr.json()
-                        if _body.get('status') == 'ok':
-                            break
-        except Exception:
-            pass
-        import asyncio; await asyncio.sleep(2)
+            async with _aio_charref.ClientSession(timeout=_aio_charref.ClientTimeout(total=120)) as session:
+                async with session.post(_NUMZ_ENDPOINT, json=payload) as resp:
+                    if resp.status != 200:
+                        return JSONResponse({'error': f'LLM error: {await resp.text()}'}, status_code=resp.status)
+                    data = await resp.json()
+                    content = data.get('choices', [{}])[0].get('message', {}).get('content', '')
+                    import re
+                    json_match = re.search(r'\{[^{}]*\}', content)
+                    parsed = json.loads(json_match.group()) if json_match else json.loads(content)
+                    char_desc = parsed.get('description', '')
+                    if not char_desc:
+                        for v in parsed.values():
+                            if isinstance(v, str) and len(v) > 20:
+                                char_desc = v; break
+        except Exception as e:
+            return JSONResponse({'error': str(e)}, status_code=500)
+
+    if not char_desc:
+        return JSONResponse({'error': 'No character description available'}, status_code=422)
 
     try:
-        async with _aio_charref.ClientSession(timeout=_aio_charref.ClientTimeout(total=120)) as session:
-            async with session.post(_NUMZ_ENDPOINT, json=payload) as resp:
-                if resp.status != 200:
-                    text = await resp.text()
-                    return JSONResponse({'error': f'LLM error: {text}'}, status_code=resp.status)
-                data = await resp.json()
-                content = data.get('choices', [{}])[0].get('message', {}).get('content', '')
-
-                # Parse JSON from LLM response
-                import re
-                json_match = re.search(r'\{[^{}]*\}', content)
-                if json_match:
-                    parsed = json.loads(json_match.group())
-                else:
-                    parsed = json.loads(content)
-
-                char_desc = parsed.get('description', '')
-                if not char_desc:
-                    for v in parsed.values():
-                        if isinstance(v, str) and len(v) > 20:
-                            char_desc = v; break
-
-                if not char_desc:
-                    return JSONResponse({'error': f'LLM returned no description. Keys: {list(parsed.keys())}'}, status_code=422)
-
-                # Check if this is an outfit change (has original_outfit field)
                 original_outfit = body.get('original_outfit', '')
                 style_suffix = f', {style_desc} style' if style_desc.strip() else ''
 
@@ -3520,7 +3522,7 @@ async def generate_character_refs_direct(request: Request):
                         {'view': 'front', 'prompt': f'character model sheet, front view, facing the viewer, full body, standing straight, arms at sides, solid flat gray background, even flat lighting, no shadows, {char_desc}{style_suffix}', 'image_path': None},
                         {'view': 'side', 'prompt': f'character model sheet, side profile view, full body, facing left, strict left profile silhouette, solid flat gray background, even flat lighting, no shadows, {char_desc}{style_suffix}', 'image_path': None},
                     ]
-                return JSONResponse({'status': 'success', 'views': views})
+                return JSONResponse({'status': 'success', 'views': views, 'generated_description': char_desc})
     except Exception as e:
         return JSONResponse({'error': str(e)}, status_code=500)
 
