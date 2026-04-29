@@ -3478,12 +3478,48 @@ async def generate_character_refs_direct(request: Request):
                 if not char_desc:
                     return JSONResponse({'error': f'LLM returned no description. Keys: {list(parsed.keys())}'}, status_code=422)
 
-                # Build angle prompts
+                # Check if this is an outfit change (has original_outfit field)
+                original_outfit = body.get('original_outfit', '')
                 style_suffix = f', {style_desc} style' if style_desc.strip() else ''
-                views = [
-                    {'view': 'front', 'prompt': f'character model sheet, front view, facing the viewer, full body, standing straight, arms at sides, solid flat gray background, even flat lighting, no shadows, {char_desc}{style_suffix}', 'image_path': None},
-                    {'view': 'side', 'prompt': f'character model sheet, side profile view, full body, facing left, strict left profile silhouette, solid flat gray background, even flat lighting, no shadows, {char_desc}{style_suffix}', 'image_path': None},
-                ]
+
+                if original_outfit.strip():
+                    # MULTI-TURN PROMPT for outfit change — preserves character identity
+                    # Z-Image's Qwen3-4B text encoder understands chat format
+                    angle_specs = [
+                        ('front', 'front view, facing the viewer, full body, standing straight, arms at sides'),
+                        ('side', 'side profile view, full body, facing left, strict left profile silhouette'),
+                    ]
+                    views = []
+                    for view_name, angle_desc in angle_specs:
+                        # Extract face/body features from char_desc (everything except outfit)
+                        prompt = (
+                            f'<|im_start|>system\n'
+                            f'Generate an anime character model sheet. Preserve all character identity features exactly across outfit changes.{style_suffix}<|im_end|>\n'
+                            f'<|im_start|>user\n'
+                            f'Character sheet: {char_desc}\n'
+                            f'Scene: {angle_desc}, solid flat gray background, even flat lighting, no shadows<|im_end|>\n'
+                            f'<|im_start|>assistant\n'
+                            f'<think>\n'
+                            f'Character identity locked. Generating character model sheet.\n'
+                            f'</think>\n'
+                            f'Character model sheet as specified.<|im_end|>\n'
+                            f'<|im_start|>user\n'
+                            f'Now change the outfit to: {description.split("Outfit:")[-1].strip() if "Outfit:" in description else description}\n'
+                            f'Keep the character\'s face, hair, skin, body build, proportions, and art style exactly the same. Only change the clothing and accessories.<|im_end|>\n'
+                            f'<|im_start|>assistant\n'
+                            f'<think>\n'
+                            f'Preserving: face shape, eye color, hair style/color, skin tone, body proportions, art style\n'
+                            f'Changing: outfit only\n'
+                            f'</think>\n'
+                            f'Character model sheet with new outfit, {angle_desc}, solid flat gray background.<|im_end|>'
+                        )
+                        views.append({'view': view_name, 'prompt': prompt, 'image_path': None})
+                else:
+                    # SINGLE-TURN PROMPT for initial character creation
+                    views = [
+                        {'view': 'front', 'prompt': f'character model sheet, front view, facing the viewer, full body, standing straight, arms at sides, solid flat gray background, even flat lighting, no shadows, {char_desc}{style_suffix}', 'image_path': None},
+                        {'view': 'side', 'prompt': f'character model sheet, side profile view, full body, facing left, strict left profile silhouette, solid flat gray background, even flat lighting, no shadows, {char_desc}{style_suffix}', 'image_path': None},
+                    ]
                 return JSONResponse({'status': 'success', 'views': views})
     except Exception as e:
         return JSONResponse({'error': str(e)}, status_code=500)
