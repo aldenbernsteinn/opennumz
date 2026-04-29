@@ -3496,23 +3496,14 @@ async def generate_character_refs_direct(request: Request):
                 style_suffix = f', {style_desc} style' if style_desc.strip() else ''
 
                 if original_outfit.strip():
-                    # Single prompt with character desc but OUTFIT SWAPPED
-                    # Don't use multi-turn — it makes the model show both outfits
-                    # Instead, take the saved character description and replace the outfit part
+                    # INPAINTING MODE: prompt describes ONLY the new outfit
+                    # The face/hair is preserved by the mask, not by the prompt
+                    # Including the old character description confuses the model
                     new_outfit = description.split('Outfit:')[-1].strip() if 'Outfit:' in description else description
 
-                    # Strip outfit from the saved description and append new outfit
-                    # The saved desc has face/hair/body/outfit all in one paragraph
-                    # We append override instructions
-                    outfit_prompt = (
-                        f'{char_desc}. '
-                        f'IMPORTANT: ignore any clothing mentioned above. '
-                        f'The character is wearing: {new_outfit}'
-                    )
-
                     views = [
-                        {'view': 'front', 'prompt': f'character model sheet, single character, front view, facing the viewer, full body, standing straight, arms at sides, solid flat gray background, even flat lighting, no shadows, {outfit_prompt}{style_suffix}', 'image_path': None},
-                        {'view': 'side', 'prompt': f'character model sheet, single character, side profile view, full body, facing left, strict left profile silhouette, solid flat gray background, even flat lighting, no shadows, {outfit_prompt}{style_suffix}', 'image_path': None},
+                        {'view': 'front', 'prompt': f'full body, front view, solid flat gray background, wearing {new_outfit}{style_suffix}', 'image_path': None},
+                        {'view': 'side', 'prompt': f'full body, side profile, solid flat gray background, wearing {new_outfit}{style_suffix}', 'image_path': None},
                     ]
                 else:
                     # SINGLE-TURN PROMPT for initial character creation
