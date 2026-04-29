@@ -3496,42 +3496,29 @@ async def generate_character_refs_direct(request: Request):
                 style_suffix = f', {style_desc} style' if style_desc.strip() else ''
 
                 if original_outfit.strip():
-                    # MULTI-TURN PROMPT for outfit change — preserves character identity
-                    # Z-Image's Qwen3-4B text encoder understands chat format
-                    angle_specs = [
-                        ('front', 'front view, facing the viewer, full body, standing straight, arms at sides'),
-                        ('side', 'side profile view, full body, facing left, strict left profile silhouette'),
+                    # Single prompt with character desc but OUTFIT SWAPPED
+                    # Don't use multi-turn — it makes the model show both outfits
+                    # Instead, take the saved character description and replace the outfit part
+                    new_outfit = description.split('Outfit:')[-1].strip() if 'Outfit:' in description else description
+
+                    # Strip outfit from the saved description and append new outfit
+                    # The saved desc has face/hair/body/outfit all in one paragraph
+                    # We append override instructions
+                    outfit_prompt = (
+                        f'{char_desc}. '
+                        f'IMPORTANT: ignore any clothing mentioned above. '
+                        f'The character is wearing: {new_outfit}'
+                    )
+
+                    views = [
+                        {'view': 'front', 'prompt': f'character model sheet, single character, front view, facing the viewer, full body, standing straight, arms at sides, solid flat gray background, even flat lighting, no shadows, {outfit_prompt}{style_suffix}', 'image_path': None},
+                        {'view': 'side', 'prompt': f'character model sheet, single character, side profile view, full body, facing left, strict left profile silhouette, solid flat gray background, even flat lighting, no shadows, {outfit_prompt}{style_suffix}', 'image_path': None},
                     ]
-                    views = []
-                    for view_name, angle_desc in angle_specs:
-                        # Extract face/body features from char_desc (everything except outfit)
-                        prompt = (
-                            f'<|im_start|>system\n'
-                            f'Generate an anime character model sheet. Preserve all character identity features exactly across outfit changes.{style_suffix}<|im_end|>\n'
-                            f'<|im_start|>user\n'
-                            f'Character sheet: {char_desc}\n'
-                            f'Scene: {angle_desc}, solid flat gray background, even flat lighting, no shadows<|im_end|>\n'
-                            f'<|im_start|>assistant\n'
-                            f'<think>\n'
-                            f'Character identity locked. Generating character model sheet.\n'
-                            f'</think>\n'
-                            f'Character model sheet as specified.<|im_end|>\n'
-                            f'<|im_start|>user\n'
-                            f'Now change the outfit to: {description.split("Outfit:")[-1].strip() if "Outfit:" in description else description}\n'
-                            f'Keep the character\'s face, hair, skin, body build, proportions, and art style exactly the same. Only change the clothing and accessories.<|im_end|>\n'
-                            f'<|im_start|>assistant\n'
-                            f'<think>\n'
-                            f'Preserving: face shape, eye color, hair style/color, skin tone, body proportions, art style\n'
-                            f'Changing: outfit only\n'
-                            f'</think>\n'
-                            f'Character model sheet with new outfit, {angle_desc}, solid flat gray background.<|im_end|>'
-                        )
-                        views.append({'view': view_name, 'prompt': prompt, 'image_path': None})
                 else:
                     # SINGLE-TURN PROMPT for initial character creation
                     views = [
-                        {'view': 'front', 'prompt': f'character model sheet, front view, facing the viewer, full body, standing straight, arms at sides, solid flat gray background, even flat lighting, no shadows, {char_desc}{style_suffix}', 'image_path': None},
-                        {'view': 'side', 'prompt': f'character model sheet, side profile view, full body, facing left, strict left profile silhouette, solid flat gray background, even flat lighting, no shadows, {char_desc}{style_suffix}', 'image_path': None},
+                        {'view': 'front', 'prompt': f'character model sheet, single character, front view, facing the viewer, full body, standing straight, arms at sides, solid flat gray background, even flat lighting, no shadows, {char_desc}{style_suffix}', 'image_path': None},
+                        {'view': 'side', 'prompt': f'character model sheet, single character, side profile view, full body, facing left, strict left profile silhouette, solid flat gray background, even flat lighting, no shadows, {char_desc}{style_suffix}', 'image_path': None},
                     ]
                 return JSONResponse({'status': 'success', 'views': views, 'generated_description': char_desc})
     except Exception as e:
