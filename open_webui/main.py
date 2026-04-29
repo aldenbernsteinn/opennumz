@@ -3404,12 +3404,22 @@ async def generate_character_refs_direct(request: Request):
         try:
             import base64 as _b64, io as _io
             from PIL import Image as _PILImg
+            try:
+                from pillow_heif import register_heif_opener as _reg
+                _reg()
+            except ImportError:
+                pass
             raw = ref_image_b64
             if raw.startswith('data:'):
                 b64_data = raw.split(',', 1)[1] if ',' in raw else raw
             else:
                 b64_data = raw
             img_bytes = _b64.b64decode(b64_data)
+            # Detect HEIC by checking bytes magic
+            if img_bytes[:4] == b'\x00\x00\x00' or b'ftyp' in img_bytes[:12]:
+                # Try to handle as HEIC even without pillow_heif
+                # by checking if PIL can open it
+                pass
             img = _PILImg.open(_io.BytesIO(img_bytes)).convert('RGB')
             max_dim = 1536
             if img.width > max_dim or img.height > max_dim:
