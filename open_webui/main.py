@@ -4311,20 +4311,37 @@ async def claude_ws(websocket):
 
     async def read_pty():
         nonlocal closed
-        while not closed:
-            try:
-                r, _, _ = select.select([master_fd], [], [], 0.05)
-                if r:
+        readable = asyncio.Event()
+        loop.add_reader(master_fd, readable.set)
+        try:
+            while not closed:
+                readable.clear()
+                try:
+                    await asyncio.wait_for(readable.wait(), timeout=5.0)
+                except asyncio.TimeoutError:
+                    continue
+                try:
                     data = os.read(master_fd, 4096)
                     if data:
                         await websocket.send_bytes(data)
                     else:
                         break
-            except OSError:
+                except OSError:
+                    break
+        finally:
+            loop.remove_reader(master_fd)
+
+    async def keepalive():
+        nonlocal closed
+        while not closed:
+            await asyncio.sleep(15)
+            try:
+                await websocket.send_text('\x01{"type":"ping"}')
+            except Exception:
                 break
-            await asyncio.sleep(0.01)
 
     reader_task = asyncio.create_task(read_pty())
+    keepalive_task = asyncio.create_task(keepalive())
 
     try:
         while True:
@@ -4351,6 +4368,7 @@ async def claude_ws(websocket):
     finally:
         closed = True
         reader_task.cancel()
+        keepalive_task.cancel()
         try:
             os.close(master_fd)
         except OSError:

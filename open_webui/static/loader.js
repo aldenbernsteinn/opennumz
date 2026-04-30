@@ -13,8 +13,8 @@
 
 // === Sidebar buttons (Quiz + Studio) — injected into both desktop and mobile ===
 (function() {
-  if (['/code','/jarvis','/quiz','/studio'].indexOf(window.location.pathname) !== -1) return;
-  var BTN_HTML = '<a href="/studio" class="sidebar-link-btn" onclick="event.preventDefault();window.location.href=\'/studio\'">Studio</a><a href="/quiz" class="sidebar-link-btn" onclick="event.preventDefault();window.location.href=\'/quiz\'">Quiz</a>';
+  if (['/code','/jarvis','/quiz','/studio','/claude'].indexOf(window.location.pathname) !== -1) return;
+  var BTN_HTML = '<a href="/claude" class="sidebar-link-btn" onclick="event.preventDefault();window.location.href=\'/claude\'">Claude</a><a href="/studio" class="sidebar-link-btn" onclick="event.preventDefault();window.location.href=\'/studio\'">Studio</a><a href="/quiz" class="sidebar-link-btn" onclick="event.preventDefault();window.location.href=\'/quiz\'">Quiz</a>';
 
   function inject() {
     // Desktop: inject after sidebar-new-chat-button container

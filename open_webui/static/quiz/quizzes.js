@@ -9,6 +9,6 @@ var QUIZZES = [
     id: 'COGS10-exam1',
     name: 'COGS 10 — Exam 1',
     description: 'Lectures 2-8: Tech, Representation, Affordances, Multimedia Learning',
-    questionCount: 50
+    questionCount: 80
   }
 ];

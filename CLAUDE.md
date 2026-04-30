@@ -59,5 +59,64 @@ Restarts the systemd service. Uses `PYTHONPATH` to load from this repo.
 - `src/` — Svelte source (components, routes, lib)
 - `open_webui/main.py` — FastAPI app. numz proxy + session APIs at the bottom.
 - `open_webui/static/` — Our injected files (loader.js, numz-gui.js, CSS, images). Edit directly.
+- `open_webui/static/studio/` — LTX Studio compiled React frontend. Built from `/home/aldenb/LTX-Desktop/frontend/`.
 - `open_webui/frontend/` — Compiled build output. Don't edit.
 - `open_webui/config.py` — Startup config (static/ served as-is, no copy step)
+
+## Studio (Video Storyboard)
+
+Studio lives at `/studio`. It's a compiled React app from `/home/aldenb/LTX-Desktop/`.
+
+### Studio Build & Deploy
+
+```bash
+cd /home/aldenb/LTX-Desktop && pnpm build:frontend
+# Then copy to OpenNumz:
+NEW_JS=$(basename dist/assets/index-*.js)
+NEW_CSS=$(basename dist/assets/index-*.css)
+cd /home/aldenb/opennumz
+cp /home/aldenb/LTX-Desktop/dist/assets/$NEW_JS open_webui/static/studio/assets/
+cp /home/aldenb/LTX-Desktop/dist/assets/$NEW_CSS open_webui/static/studio/assets/
+sed -i "s|index-[A-Za-z0-9_-]*\.js|$NEW_JS|" open_webui/static/studio/index.html
+sed -i "s|index-[A-Za-z0-9_-]*\.css|$NEW_CSS|" open_webui/static/studio/index.html
+find open_webui/static/studio/assets/ -name 'index-*' ! -name "$NEW_JS" ! -name "$NEW_CSS" -delete
+./deploy.sh
+```
+
+### Models Used
+
+| Model | Purpose | Location | VRAM |
+|-------|---------|----------|------|
+| **Z-Image Turbo** | Initial character creation (front + side refs), scenes without characters, style samples | `~/.numz/ltx-data/models/Z-Image-Turbo/` | ~8GB |
+| **Flux 2 Klein 9B** | Outfit changes & scenes with characters — uses native reference image for face consistency | `~/.cache/huggingface/hub/models--Runware--BFL-FLUX.2-klein-9B/` (via `Runware/BFL-FLUX.2-klein-9B`) | ~18GB with cpu_offload |
+| **LTX 2.3** | Video generation from shot prompts | `~/.numz/ltx-data/models/` (GGUF checkpoint + IC-LoRA) | ~20GB |
+| **Qwen 3.5 27B** (numz) | Storyboard chat, character descriptions, style samples, outfit descriptions | llama-server at `:8899` | ~24GB |
+
+### VRAM Management
+
+Only ONE heavy model on GPU at a time. The proxy handles swapping:
+- **LLM work** (storyboard chat, character refs) → numz stays, LTX stays on standby (0 VRAM)
+- **Image generation without character** → stop numz, load Z-Image via LTX backend
+- **Image generation with character ref** → stop numz, load Flux 2 Klein via LTX backend
+- **Video generation** → stop numz, load LTX video pipeline
+
+LTX backend on standby uses 0 GPU (warmup fails, no models preloaded). Models load on demand only.
+
+### Studio Architecture
+
+- **Frontend**: React + TypeScript + Tailwind, compiled to `open_webui/static/studio/`
+- **Backend**: LTX-Desktop Python FastAPI at `127.0.0.1:8001`, proxied via `/ltx-api/*`
+- **Streaming chat**: OpenNumz endpoint at `/ltx-api/api/storyboard/chat-stream` calls numz directly (SSE)
+- **Character refs**: OpenNumz endpoint at `/ltx-api/api/storyboard/generate-character-refs` calls numz directly
+- **Image gen**: Proxied to LTX backend which routes to Z-Image or Klein based on `referenceImagePath`
+- **Projects**: Stored in `~/.numz/ltx-data/projects.json`
+- **Outputs**: All images/videos in `~/.numz/ltx-data/outputs/`
+
+### Character Consistency Pipeline
+
+1. **Create character** → Z-Image Turbo generates front + side model sheets (gray background, anime style)
+2. **Add Look** (outfit change) → Flux 2 Klein takes the Z-Image face as reference image → generates same face in new outfit
+3. **Scene with character** → Flux 2 Klein uses character's front view ref for face identity
+4. **Scene without character** → Z-Image Turbo (faster, no identity needed)
+
+Klein's native `image` parameter handles reference images — no IP-Adapter, no inpainting, no masking needed.
