@@ -4260,6 +4260,108 @@ async def proxy_jarvis_ws(ws: _StarletteWS):
             pass
 
 
+# ── /claude — browser terminal for Claude Code ──────────────────
+
+@app.get('/claude')
+async def serve_claude_page():
+    path = os.path.join(STATIC_DIR, 'claude.html')
+    if os.path.isfile(path):
+        resp = FileResponse(path, media_type='text/html')
+        resp.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        return resp
+    raise HTTPException(status_code=404)
+
+
+import pty as _pty_mod
+import fcntl
+import termios
+import struct
+import select
+
+_claude_pty_procs: dict[str, dict] = {}  # session_id → {pid, fd, master_fd}
+
+@app.websocket('/api/claude/ws')
+async def claude_ws(websocket):
+    await websocket.accept()
+    loop = asyncio.get_event_loop()
+
+    # Spawn PTY with bash
+    master_fd, slave_fd = _pty_mod.openpty()
+    pid = os.fork()
+
+    if pid == 0:
+        # Child: become session leader, attach to slave PTY
+        os.setsid()
+        os.dup2(slave_fd, 0)
+        os.dup2(slave_fd, 1)
+        os.dup2(slave_fd, 2)
+        os.close(master_fd)
+        os.close(slave_fd)
+        os.environ['TERM'] = 'xterm-256color'
+        os.execvp('bash', ['bash', '-l'])
+
+    # Parent: close slave, communicate via master
+    os.close(slave_fd)
+
+    # Make master_fd non-blocking
+    flags = fcntl.fcntl(master_fd, fcntl.F_GETFL)
+    fcntl.fcntl(master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+
+    closed = False
+
+    async def read_pty():
+        nonlocal closed
+        while not closed:
+            try:
+                r, _, _ = select.select([master_fd], [], [], 0.05)
+                if r:
+                    data = os.read(master_fd, 4096)
+                    if data:
+                        await websocket.send_bytes(data)
+                    else:
+                        break
+            except OSError:
+                break
+            await asyncio.sleep(0.01)
+
+    reader_task = asyncio.create_task(read_pty())
+
+    try:
+        while True:
+            msg = await websocket.receive()
+            if msg.get('type') == 'websocket.disconnect':
+                break
+            data = msg.get('text') or msg.get('bytes', b'')
+            if isinstance(data, str):
+                # Check for control messages (prefixed with \x01)
+                if data.startswith('\x01'):
+                    try:
+                        ctrl = json.loads(data[1:])
+                        if ctrl.get('type') == 'resize':
+                            winsize = struct.pack('HHHH', ctrl['rows'], ctrl['cols'], 0, 0)
+                            fcntl.ioctl(master_fd, termios.TIOCSWINSZ, winsize)
+                    except Exception:
+                        pass
+                else:
+                    os.write(master_fd, data.encode())
+            elif isinstance(data, bytes) and data:
+                os.write(master_fd, data)
+    except Exception:
+        pass
+    finally:
+        closed = True
+        reader_task.cancel()
+        try:
+            os.close(master_fd)
+        except OSError:
+            pass
+        try:
+            os.kill(pid, 9)
+            os.waitpid(pid, 0)
+        except OSError:
+            pass
+
+
 @app.post('/api/code/verify-pin')
 async def verify_code_pin(request: Request):
     body = await request.json()
