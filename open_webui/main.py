@@ -3496,14 +3496,14 @@ async def generate_character_refs_direct(request: Request):
                 style_suffix = f', {style_desc} style' if style_desc.strip() else ''
 
                 if original_outfit.strip():
-                    # INPAINTING MODE: prompt describes ONLY the new outfit
-                    # The face/hair is preserved by the mask, not by the prompt
-                    # Including the old character description confuses the model
+                    # KLEIN MODE: full character description + new outfit
+                    # Klein generates the entire image using reference for face identity
+                    # and the prompt for everything else (body, outfit, pose, style)
                     new_outfit = description.split('Outfit:')[-1].strip() if 'Outfit:' in description else description
 
                     views = [
-                        {'view': 'front', 'prompt': f'full body, front view, solid flat gray background, wearing {new_outfit}{style_suffix}', 'image_path': None},
-                        {'view': 'side', 'prompt': f'full body, side profile, solid flat gray background, wearing {new_outfit}{style_suffix}', 'image_path': None},
+                        {'view': 'front', 'prompt': f'character model sheet, single character, front view, facing the viewer, full body, standing straight, arms at sides, solid flat gray background, even flat lighting, no shadows, {char_desc}. Wearing: {new_outfit}{style_suffix}', 'image_path': None},
+                        {'view': 'side', 'prompt': f'character model sheet, single character, side profile view, full body, facing left, strict left profile silhouette, solid flat gray background, even flat lighting, no shadows, {char_desc}. Wearing: {new_outfit}{style_suffix}', 'image_path': None},
                     ]
                 else:
                     # SINGLE-TURN PROMPT for initial character creation
@@ -4281,7 +4281,20 @@ import select
 _claude_pty_procs: dict[str, dict] = {}  # session_id → {pid, fd, master_fd}
 
 @app.websocket('/api/claude/ws')
-async def claude_ws(websocket):
+async def claude_ws(websocket: _WS):
+    # Verify PIN before accepting the connection
+    pin = websocket.query_params.get('pin', '')
+    pin_path = os.path.expanduser('~/.numz/.ttyd-pin')
+    try:
+        with open(pin_path) as f:
+            correct_pin = f.read().strip()
+    except Exception:
+        await websocket.close(code=1008, reason='Server error')
+        return
+    if pin != correct_pin:
+        await websocket.close(code=1008, reason='Unauthorized')
+        return
+
     await websocket.accept()
     loop = asyncio.get_event_loop()
 
