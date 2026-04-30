@@ -98,6 +98,7 @@ from open_webui.routers import (
     utils,
     scim,
     terminals,
+    numz,
 )
 
 from open_webui.routers.retrieval import (
@@ -1508,6 +1509,7 @@ app.include_router(notes.router, prefix='/api/v1/notes', tags=['notes'])
 
 
 app.include_router(models.router, prefix='/api/v1/models', tags=['models'])
+app.include_router(numz.router, prefix='/api/numz', tags=['numz'])
 app.include_router(knowledge.router, prefix='/api/v1/knowledge', tags=['knowledge'])
 app.include_router(prompts.router, prefix='/api/v1/prompts', tags=['prompts'])
 app.include_router(tools.router, prefix='/api/v1/tools', tags=['tools'])
